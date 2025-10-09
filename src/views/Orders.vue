@@ -12,8 +12,8 @@
       <input type="text" v-model="searchText" placeholder="Nhập từ khóa..." />
     </div>
 
-    <!-- 📝 Form thêm / sửa -->
-    <form class="order-form" @submit.prevent="saveOrder">
+    <!-- 📝 Form thêm / sửa / xem -->
+    <form class="order-form" @submit.prevent="openConfirm(editMode ? 'edit' : 'add')">
       <div class="form-group">
         <label>ID</label>
         <input type="text" :value="displayId(order.order_id)" readonly />
@@ -21,27 +21,32 @@
 
       <div class="form-group">
         <label>Customer ID</label>
-        <input v-model="order.customer_id" type="number" required />
+        <input v-model="order.customer_id" type="number" :readonly="viewMode" required />
       </div>
 
       <div class="form-group">
         <label>User ID</label>
-        <input v-model="order.user_id" type="number" required />
+        <input v-model="order.user_id" type="number" :readonly="viewMode" required />
       </div>
 
       <div class="form-group">
         <label>Promo ID</label>
-        <input v-model="order.promo_id" type="number" placeholder="Có thể để trống" />
+        <input v-model="order.promo_id" type="number" :readonly="viewMode" placeholder="Có thể để trống" />
       </div>
 
       <div class="form-group">
         <label>Ngày đặt</label>
-        <Flatpickr v-model="order.order_date" :config="{ enableTime: true, dateFormat: 'Y-m-d H:i' }" placeholder="Chọn ngày giờ" />
+        <Flatpickr
+          v-model="order.order_date"
+          :config="{ enableTime: true, dateFormat: 'Y-m-d H:i' }"
+          placeholder="Chọn ngày giờ"
+          :disabled="viewMode"
+        />
       </div>
 
       <div class="form-group">
         <label>Trạng thái</label>
-        <select v-model="order.status">
+        <select v-model="order.status" :disabled="viewMode">
           <option value="pending">Pending</option>
           <option value="paid">Paid</option>
           <option value="canceled">Canceled</option>
@@ -50,16 +55,18 @@
 
       <div class="form-group">
         <label>Tổng tiền</label>
-        <input v-model="order.total_amount" type="number" step="0.01" />
+        <input v-model="order.total_amount" type="number" step="0.01" :readonly="viewMode" />
       </div>
 
       <div class="form-group">
         <label>Giảm giá</label>
-        <input v-model="order.discount_amount" type="number" step="0.01" />
+        <input v-model="order.discount_amount" type="number" step="0.01" :readonly="viewMode" />
       </div>
 
-      <button type="submit">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+      <!-- 🔘 Các nút hành động -->
+      <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
       <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <button type="button" v-if="viewMode" @click="closeView">Đóng</button>
     </form>
 
     <!-- 📋 Bảng hiển thị -->
@@ -78,7 +85,12 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="o in filteredOrders" :key="o.order_id">
+        <tr
+          v-for="o in filteredOrders"
+          :key="o.order_id"
+          @click="viewOrder(o)"
+          :class="{ active: viewMode && order.order_id === o.order_id }"
+        >
           <td>{{ displayId(o.order_id) }}</td>
           <td>{{ o.customer_id }}</td>
           <td>{{ o.user_id }}</td>
@@ -88,8 +100,8 @@
           <td>{{ formatPrice(o.total_amount) }}</td>
           <td>{{ formatPrice(o.discount_amount) }}</td>
           <td>
-            <button @click="editOrder(o)">✏️</button>
-            <button @click="deleteOrder(o.order_id)">🗑️</button>
+            <button @click.stop="editOrder(o)">✏️</button>
+            <button @click.stop="openConfirm('delete', o.order_id)">🗑️</button>
           </td>
         </tr>
         <tr v-if="filteredOrders.length === 0">
@@ -97,6 +109,18 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- 🧩 Popup xác nhận -->
+    <div v-if="showConfirm" class="confirm-overlay">
+      <div class="confirm-box">
+        <h3>Xác nhận</h3>
+        <p>{{ confirmMessage }}</p>
+        <div class="actions">
+          <button class="btn-yes" @click="confirmAction">Xác nhận</button>
+          <button class="btn-no" @click="closeConfirm">Hủy</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -123,9 +147,40 @@ const order = ref({
 });
 
 const editMode = ref(false);
+const viewMode = ref(false);
 const searchText = ref("");
 const filterType = ref("order_id");
 
+// popup xác nhận
+const showConfirm = ref(false);
+const confirmType = ref("");
+const confirmMessage = ref("");
+const pendingId = ref(null);
+
+function openConfirm(type, id = null) {
+  confirmType.value = type;
+  pendingId.value = id;
+
+  if (type === "add") confirmMessage.value = "Bạn có chắc muốn thêm đơn hàng này không?";
+  else if (type === "edit") confirmMessage.value = "Bạn có chắc muốn cập nhật thông tin đơn hàng này không?";
+  else if (type === "delete") confirmMessage.value = "Bạn có chắc muốn xóa đơn hàng này không?";
+
+  showConfirm.value = true;
+}
+
+function closeConfirm() {
+  showConfirm.value = false;
+  confirmType.value = "";
+  pendingId.value = null;
+}
+
+function confirmAction() {
+  if (confirmType.value === "add" || confirmType.value === "edit") saveOrderConfirmed();
+  else if (confirmType.value === "delete") deleteOrderConfirmed(pendingId.value);
+  closeConfirm();
+}
+
+// Lọc tìm kiếm
 const filteredOrders = computed(() => {
   const keyword = searchText.value.toLowerCase().trim();
   if (!keyword) return orders.value;
@@ -144,8 +199,21 @@ function formatPrice(val) {
   return Number(val).toLocaleString("vi-VN");
 }
 
-// Thêm / sửa
-function saveOrder() {
+// ✅ Chức năng xem chi tiết
+function viewOrder(o) {
+  if (!editMode.value) {
+    order.value = { ...o };
+    viewMode.value = true;
+  }
+}
+
+function closeView() {
+  viewMode.value = false;
+  resetForm();
+}
+
+// Thêm / sửa thực sự sau khi xác nhận
+function saveOrderConfirmed() {
   if (editMode.value) {
     const index = orders.value.findIndex(o => o.order_id === order.value.order_id);
     if (index !== -1) orders.value[index] = { ...order.value };
@@ -157,14 +225,16 @@ function saveOrder() {
   resetForm();
 }
 
+// Xóa thực sự sau xác nhận
+function deleteOrderConfirmed(id) {
+  orders.value = orders.value.filter(o => o.order_id !== id);
+  resetForm();
+}
+
 function editOrder(o) {
   order.value = { ...o };
   editMode.value = true;
-}
-
-function deleteOrder(id) {
-  orders.value = orders.value.filter(o => o.order_id !== id);
-  resetForm();
+  viewMode.value = false;
 }
 
 function cancelEdit() {
@@ -185,7 +255,6 @@ function resetForm() {
     discount_amount: 0,
   };
 }
-
 resetForm();
 </script>
 

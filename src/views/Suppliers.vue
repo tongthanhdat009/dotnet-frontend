@@ -12,8 +12,8 @@
       <input type="text" v-model="searchText" placeholder="Nhập từ khóa..." />
     </div>
 
-    <!-- 📝 Form thêm / sửa -->
-    <form class="supplier-form" @submit.prevent="saveSupplier">
+    <!-- 📝 Form thêm / sửa / xem -->
+    <form class="supplier-form" @submit.prevent="confirmSave">
       <div class="form-group">
         <label>ID</label>
         <input type="text" :value="displayId(supplier.id)" readonly />
@@ -21,27 +21,51 @@
 
       <div class="form-group">
         <label>Tên nhà cung cấp</label>
-        <input v-model="supplier.name" type="text" required placeholder="Nhập tên nhà cung cấp" />
+        <input
+          v-model="supplier.name"
+          type="text"
+          :readonly="viewMode && !editMode"
+          required
+          placeholder="Nhập tên nhà cung cấp"
+        />
       </div>
 
       <div class="form-group">
         <label>Phone</label>
-        <input v-model="supplier.phone" type="text" placeholder="Nhập số điện thoại" />
+        <input
+          v-model="supplier.phone"
+          type="text"
+          :readonly="viewMode && !editMode"
+          placeholder="Nhập số điện thoại"
+        />
       </div>
 
       <div class="form-group">
         <label>Email</label>
-        <input v-model="supplier.email" type="email" placeholder="Nhập email" />
+        <input
+          v-model="supplier.email"
+          type="email"
+          :readonly="viewMode && !editMode"
+          placeholder="Nhập email"
+        />
       </div>
 
       <div class="form-group">
         <label>Address</label>
-        <input v-model="supplier.address" type="text" placeholder="Nhập địa chỉ" />
+        <input
+          v-model="supplier.address"
+          type="text"
+          :readonly="viewMode && !editMode"
+          placeholder="Nhập địa chỉ"
+        />
       </div>
 
-      <button type="submit">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
-      <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <!-- Nút hành động -->
+        <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+        <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+        <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
     </form>
+
 
     <!-- 📋 Bảng hiển thị -->
     <table class="supplier-table">
@@ -56,15 +80,20 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="s in filteredSuppliers" :key="s.id">
+        <tr
+          v-for="s in filteredSuppliers"
+          :key="s.id"
+          :class="{ active: supplier.id === s.id && (editMode || viewMode) }"
+          @click="viewSupplier(s)"
+        >
           <td>{{ displayId(s.id) }}</td>
           <td>{{ s.name }}</td>
           <td>{{ s.phone }}</td>
           <td>{{ s.email }}</td>
           <td>{{ s.address }}</td>
           <td>
-            <button @click="editSupplier(s)">✏️</button>
-            <button @click="deleteSupplier(s.id)">🗑️</button>
+            <button @click.stop="confirmEdit(s)">✏️</button>
+            <button @click.stop="confirmDelete(s)">🗑️</button>
           </td>
         </tr>
         <tr v-if="filteredSuppliers.length === 0">
@@ -72,13 +101,24 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- ⚡ Popup xác nhận -->
+    <div v-if="showConfirm" class="confirm-overlay">
+      <div class="confirm-box">
+        <h3>{{ confirmTitle }}</h3>
+        <p>{{ confirmMessage }}</p>
+        <div class="actions">
+          <button @click="handleConfirm" class="btn-yes">Xác nhận</button>
+          <button @click="closeConfirm" class="btn-no">Hủy</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from "vue";
 
-// Dữ liệu mẫu suppliers
 const suppliers = ref([
   { id: 1, name: "Samsung VN", phone: "0901234567", email: "samsung@vn.com", address: "Hà Nội" },
   { id: 2, name: "Pepsi VN", phone: "0912345678", email: "pepsi@vn.com", address: "TP.HCM" },
@@ -87,8 +127,15 @@ const suppliers = ref([
 
 const supplier = ref({ id: null, name: "", phone: "", email: "", address: "" });
 const editMode = ref(false);
+const viewMode = ref(false);
 const searchText = ref("");
 const filterType = ref("id");
+
+// Popup state
+const showConfirm = ref(false);
+const confirmTitle = ref("");
+const confirmMessage = ref("");
+let confirmAction = null;
 
 // Lọc danh sách
 const filteredSuppliers = computed(() => {
@@ -106,45 +153,93 @@ function displayId(id) {
   return "S" + id.toString().padStart(3, "0");
 }
 
-// Lưu nhà cung cấp
+// 🆕 Sinh ID tiếp theo
+function nextId() {
+  return suppliers.value.length > 0 ? Math.max(...suppliers.value.map((s) => s.id)) + 1 : 1;
+}
+
+// ====== CRUD với popup ======
+function confirmSave() {
+  confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
+  confirmMessage.value = editMode.value
+    ? "Bạn có chắc muốn cập nhật thông tin nhà cung cấp này?"
+    : "Bạn có chắc muốn thêm nhà cung cấp mới?";
+  confirmAction = saveSupplier;
+  showConfirm.value = true;
+}
+
 function saveSupplier() {
   if (editMode.value) {
     const index = suppliers.value.findIndex((s) => s.id === supplier.value.id);
     if (index !== -1) suppliers.value[index] = { ...supplier.value };
     editMode.value = false;
   } else {
-    const nextId = suppliers.value.length > 0 ? Math.max(...suppliers.value.map(s => s.id)) + 1 : 1;
-    suppliers.value.push({ ...supplier.value, id: nextId });
+    suppliers.value.push({ ...supplier.value, id: nextId() });
   }
   resetForm();
+  showConfirm.value = false;
 }
 
-// Sửa
+// ✏️ Sửa
+function confirmEdit(s) {
+  confirmTitle.value = "Xác nhận chỉnh sửa";
+  confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin nhà cung cấp này?";
+  confirmAction = () => editSupplier(s);
+  showConfirm.value = true;
+}
 function editSupplier(s) {
   supplier.value = { ...s };
   editMode.value = true;
+  viewMode.value = false;
+  showConfirm.value = false;
 }
 
-// Xóa
-function deleteSupplier(id) {
-  suppliers.value = suppliers.value.filter((s) => s.id !== id);
+// 👁️ Xem (khi click dòng)
+function viewSupplier(s) {
+  if (!editMode.value) {
+    supplier.value = { ...s };
+    viewMode.value = true;
+  }
+}
+function closeView() {
+  viewMode.value = false;
   resetForm();
 }
 
-// Hủy edit
+// 🗑️ Xóa
+function confirmDelete(s) {
+  confirmTitle.value = "Xác nhận xóa";
+  confirmMessage.value = `Bạn có chắc muốn xóa nhà cung cấp "${s.name}" không?`;
+  confirmAction = () => deleteSupplier(s.id);
+  showConfirm.value = true;
+}
+function deleteSupplier(id) {
+  suppliers.value = suppliers.value.filter((s) => s.id !== id);
+  resetForm();
+  showConfirm.value = false;
+}
+
+// ❌ Hủy sửa
 function cancelEdit() {
   editMode.value = false;
   resetForm();
 }
 
-// Reset form
-function resetForm() {
-  const nextId = suppliers.value.length > 0 ? Math.max(...suppliers.value.map(s => s.id)) + 1 : 1;
-  supplier.value = { id: nextId, name: "", phone: "", email: "", address: "" };
+// ✅ Popup
+function handleConfirm() {
+  if (confirmAction) confirmAction();
+}
+function closeConfirm() {
+  showConfirm.value = false;
 }
 
+// 🔄 Reset
+function resetForm() {
+  supplier.value = { id: nextId(), name: "", phone: "", email: "", address: "" };
+}
 resetForm();
 </script>
+
 
 <style scoped>
 .suppliers-page {
@@ -153,12 +248,14 @@ resetForm();
   border-radius: 10px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
+
 .supplier-form {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
+
 .supplier-table {
   width: 100%;
   border-collapse: collapse;
@@ -173,4 +270,19 @@ resetForm();
   background-color: #2c3e50;
   color: white;
 }
+.supplier-table tr:hover {
+  background-color: #f8f8f8;
+  cursor: pointer;
+}
+
+.supplier-table tr.active {
+  background-color: #e7f1ff;
+}
+
+.form-actions {
+  grid-column: span 2;
+  display: flex;
+  gap: 10px;
+}
+
 </style>

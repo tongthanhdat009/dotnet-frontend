@@ -10,6 +10,7 @@ import Inventory from "../views/Inventory.vue";
 import Promotions from "../views/Promotions.vue";
 import OrderItems from "../views/Order_items.vue";
 import Payments from "../views/Payments.vue";
+import RolePermission from "../views/RolePermission.vue";
 const routes = [
   { path: "/", redirect: "/dashboard" },
   { path: "/dashboard", component: Dashboard },
@@ -22,7 +23,8 @@ const routes = [
   {path:"/inventory",component:Inventory},
   {path:"/promotions",component:Promotions},
   {path:"/order-items",component:OrderItems},
-  {path:"/payments",component:Payments}
+  {path:"/payments",component:Payments},
+  {path:"/role-permission",component:RolePermission}
 ];
 
 const router = createRouter({

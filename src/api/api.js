@@ -1,14 +1,24 @@
+import axios from "axios";
+
+const API_URL = "http://localhost:7000/api/products";
+
+// Named exports
 export async function getProducts() {
-  return {
-    data: [
-      { product_id: 1, product_name: "Sản phẩm A", price: 10000 },
-      { product_id: 2, product_name: "Sản phẩm B", price: 20000 },
-      { product_id: 3, product_name: "Sản phẩm C", price: 30000 }
-    ]
-  };
+  const res = await axios.get(API_URL);
+  return res.data;
+}
+
+export async function addProduct(product) {
+  const res = await axios.post(API_URL, product);
+  return res.data;
+}
+
+export async function updateProduct(id, product) {
+  const res = await axios.put(`${API_URL}/${id}`, product);
+  return res.data;
 }
 
 export async function deleteProduct(id) {
-  console.log("Xóa sản phẩm", id);
-  return true;
+  const res = await axios.delete(`${API_URL}/${id}`);
+  return res.data;
 }

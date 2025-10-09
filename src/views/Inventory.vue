@@ -13,7 +13,7 @@
     </div>
 
     <!-- 📝 Form thêm / sửa -->
-    <form class="inventory-form" @submit.prevent="saveInventory">
+    <form class="inventory-form" @submit.prevent="confirmAction('save')">
       <div class="form-group">
         <label>ID</label>
         <input type="text" :value="displayId(inventory.inventory_id)" readonly />
@@ -21,7 +21,7 @@
 
       <div class="form-group">
         <label>Sản phẩm</label>
-        <select v-model="inventory.product_id" required>
+        <select v-model="inventory.product_id" :disabled="viewMode" required>
           <option disabled value="">-- Chọn sản phẩm --</option>
           <option v-for="p in products" :key="p.product_id" :value="p.product_id">
             {{ p.product_name }}
@@ -31,11 +31,12 @@
 
       <div class="form-group">
         <label>Số lượng</label>
-        <input v-model="inventory.quantity" type="number" min="0" required />
+        <input v-model="inventory.quantity" type="number" min="0" :readonly="viewMode" required />
       </div>
 
-      <button type="submit">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+      <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
       <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <button type="button" v-if="viewMode" @click="closeView">Đóng</button>
     </form>
 
     <!-- 📋 Bảng hiển thị -->
@@ -50,14 +51,19 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="i in filteredInventory" :key="i.inventory_id">
+        <tr
+          v-for="i in filteredInventory"
+          :key="i.inventory_id"
+          @click="viewInventory(i)"
+          :class="{ active: viewMode && inventory.inventory_id === i.inventory_id }"
+        >
           <td>{{ displayId(i.inventory_id) }}</td>
           <td>{{ getProductName(i.product_id) }}</td>
           <td>{{ i.quantity }}</td>
           <td>{{ i.updated_at }}</td>
           <td>
-            <button @click="editInventory(i)">✏️</button>
-            <button @click="deleteInventory(i.inventory_id)">🗑️</button>
+            <button @click.stop="editInventory(i)">✏️</button>
+            <button @click.stop="confirmAction('delete', i.inventory_id)">🗑️</button>
           </td>
         </tr>
         <tr v-if="filteredInventory.length === 0">
@@ -65,13 +71,24 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- 🧾 Hộp xác nhận -->
+    <div v-if="showConfirm" class="confirm-overlay">
+      <div class="confirm-box">
+        <p>{{ confirmMessage }}</p>
+        <div class="actions">
+          <button class="btn-yes" @click="handleConfirm">Xác nhận</button>
+          <button class="btn-no" @click="cancelConfirm">Hủy</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from "vue";
 
-// Dữ liệu sản phẩm giả lập (giống products page)
+// Dữ liệu sản phẩm giả lập
 const products = ref([
   { product_id: 1, product_name: "Coca Cola lon" },
   { product_id: 2, product_name: "Pepsi lon" },
@@ -87,8 +104,41 @@ const inventoryData = ref([
 
 const inventory = ref({ inventory_id: null, product_id: "", quantity: 0, updated_at: "" });
 const editMode = ref(false);
+const viewMode = ref(false); // 👁️ Chế độ xem chi tiết
 const searchText = ref("");
 const filterType = ref("inventory_id");
+
+// ⚙️ Xác nhận hành động
+const showConfirm = ref(false);
+const confirmActionType = ref("");
+const confirmMessage = ref("");
+const pendingId = ref(null);
+
+// Gọi xác nhận
+function confirmAction(type, id = null) {
+  confirmActionType.value = type;
+  pendingId.value = id;
+
+  if (type === "save") {
+    confirmMessage.value = editMode.value ? "Bạn có chắc muốn cập nhật tồn kho này không?" : "Bạn có chắc muốn thêm mới tồn kho này không?";
+  } else if (type === "delete") {
+    confirmMessage.value = "Bạn có chắc muốn xóa mục tồn kho này không?";
+  }
+
+  showConfirm.value = true;
+}
+
+// Khi nhấn Xác nhận
+function handleConfirm() {
+  if (confirmActionType.value === "save") saveInventory();
+  if (confirmActionType.value === "delete") deleteInventory(pendingId.value);
+  showConfirm.value = false;
+}
+
+// Khi nhấn Hủy
+function cancelConfirm() {
+  showConfirm.value = false;
+}
 
 // Lọc inventory
 const filteredInventory = computed(() => {
@@ -125,13 +175,28 @@ function saveInventory() {
   resetForm();
 }
 
-// Sửa
+// ✏️ Sửa
 function editInventory(i) {
   inventory.value = { ...i };
   editMode.value = true;
+  viewMode.value = false;
 }
 
-// Xóa
+// 👁️ Xem chi tiết
+function viewInventory(i) {
+  if (!editMode.value) {
+    inventory.value = { ...i };
+    viewMode.value = true;
+  }
+}
+
+// ❌ Đóng xem chi tiết
+function closeView() {
+  viewMode.value = false;
+  resetForm();
+}
+
+// 🗑️ Xóa
 function deleteInventory(id) {
   inventoryData.value = inventoryData.value.filter(i => i.inventory_id !== id);
   resetForm();
@@ -166,6 +231,7 @@ resetForm();
   gap: 12px;
   margin-bottom: 20px;
 }
+
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
@@ -179,5 +245,20 @@ resetForm();
 .inventory-table th {
   background-color: #2c3e50;
   color: white;
+}
+
+.inventory-table tr:hover {
+  background-color: #f8f8f8;
+  cursor: pointer;
+}
+
+.inventory-table tr.active {
+  background-color: #e7f1ff;
+}
+
+.form-actions {
+  grid-column: span 2;
+  display: flex;
+  gap: 10px;
 }
 </style>

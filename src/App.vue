@@ -15,6 +15,7 @@
         <router-link to="/orders">📝 Orders</router-link>
         <router-link to="/order-items">📋 Order Items</router-link>
         <router-link to="/payments">💳 Payments</router-link>
+        <router-link to="/role-permission">👤 RolePermission</router-link>
       </nav>
     </aside>
 

@@ -6,23 +6,23 @@
     <div class="search-bar">
       <label for="filterType">Tìm theo:</label>
       <select v-model="filterType" id="filterType">
-        <option value="product_id">ID</option>
-        <option value="product_name">Tên sản phẩm</option>
+        <option value="productId">ID</option>
+        <option value="productName">Tên sản phẩm</option>
         <option value="barcode">Mã vạch</option>
       </select>
       <input type="text" v-model="searchText" placeholder="Nhập từ khóa..." />
     </div>
 
-    <!-- 📝 Form thêm / sửa -->
-    <form class="product-form" @submit.prevent="saveProduct">
+    <!-- 📝 Form thêm / sửa / xem -->
+    <form class="product-form" @submit.prevent="confirmSave">
       <div class="form-group">
         <label>ID</label>
-        <input type="text" :value="displayId(product.product_id)" readonly />
+        <input type="text" :value="displayId(product.productId)" readonly />
       </div>
 
       <div class="form-group">
         <label>Danh mục (Category ID)</label>
-        <select v-model="product.category_id">
+        <select v-model="product.categoryId" :disabled="viewMode && !editMode">
           <option disabled value="">-- Chọn danh mục --</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
@@ -30,7 +30,7 @@
 
       <div class="form-group">
         <label>Nhà cung cấp (Supplier ID)</label>
-        <select v-model="product.supplier_id">
+        <select v-model="product.supplierId" :disabled="viewMode && !editMode">
           <option disabled value="">-- Chọn NCC --</option>
           <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
@@ -38,30 +38,55 @@
 
       <div class="form-group">
         <label>Tên sản phẩm</label>
-        <input v-model="product.product_name" type="text" required placeholder="Nhập tên sản phẩm" />
+        <input
+          v-model="product.productName"
+          type="text"
+          required
+          placeholder="Nhập tên sản phẩm"
+          :readonly="viewMode && !editMode"
+        />
       </div>
 
       <div class="form-group">
         <label>Mã vạch</label>
-        <input v-model="product.barcode" type="text" placeholder="Nhập barcode" />
+        <input
+          v-model="product.barcode"
+          type="text"
+          placeholder="Nhập barcode"
+          :readonly="viewMode && !editMode"
+        />
       </div>
 
       <div class="form-group">
         <label>Giá</label>
-        <input v-model="product.price" type="number" step="0.01" required />
+        <input
+          v-model="product.price"
+          type="number"
+          step="0.01"
+          required
+          :readonly="viewMode && !editMode"
+        />
       </div>
 
       <div class="form-group">
         <label>Đơn vị</label>
-        <input v-model="product.unit" type="text" placeholder="Ví dụ: cái, hộp, chiếc..." />
+        <input
+          v-model="product.unit"
+          type="text"
+          placeholder="Ví dụ: cái, hộp, chiếc..."
+          :readonly="viewMode && !editMode"
+        />
       </div>
 
-      <button type="submit">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+      <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
       <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
     </form>
 
     <!-- 📋 Bảng hiển thị -->
-    <table class="product-table">
+    <div v-if="loading" class="loading">Đang tải sản phẩm...</div>
+    <div v-else-if="products.length === 0" class="no-data">Không có dữ liệu sản phẩm</div>
+    <table v-else class="product-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -75,31 +100,53 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="p in filteredProducts" :key="p.product_id">
-          <td>{{ displayId(p.product_id) }}</td>
-          <td>{{ getCategoryName(p.category_id) }}</td>
-          <td>{{ getSupplierName(p.supplier_id) }}</td>
-          <td>{{ p.product_name }}</td>
-          <td>{{ p.barcode }}</td>
-          <td>{{ formatPrice(p.price) }}</td>
-          <td>{{ p.unit }}</td>
+        <tr
+          v-for="p in paginatedProducts"
+          :key="p?.productId ?? Math.random()"
+          @click="viewProduct(p)"
+          :class="{ active: viewMode && product.productId === p?.productId }"
+        >
+          <td>{{ displayId(p?.productId) }}</td>
+          <td>{{ p?.categoryName || '-' }}</td>
+          <td>{{ p?.supplierName || '-' }}</td>
+          <td>{{ p?.productName || '-' }}</td>
+          <td>{{ p?.barcode || '-' }}</td>
+          <td>{{ formatPrice(p?.price) }}</td>
+          <td>{{ p?.unit || '-' }}</td>
           <td>
-            <button @click="editProduct(p)">✏️</button>
-            <button @click="deleteProduct(p.product_id)">🗑️</button>
+            <button @click.stop="editProduct(p)">✏️</button>
+            <button @click.stop="confirmDelete(p?.productId)">🗑️</button>
           </td>
-        </tr>
-        <tr v-if="filteredProducts.length === 0">
-          <td colspan="8">Không có dữ liệu phù hợp</td>
         </tr>
       </tbody>
     </table>
+
+    <!-- 🔢 Phân trang -->
+    <div v-if="totalPages > 1" class="pagination">
+      <button @click="currentPage--" :disabled="currentPage === 1"><</button>
+      <span>Trang {{ currentPage }} / {{ totalPages }}</span>
+      <button @click="currentPage++" :disabled="currentPage === totalPages">></button>
+    </div>
+
+    <!-- 🔔 Popup xác nhận -->
+    <div v-if="showConfirm" class="confirm-overlay">
+      <div class="confirm-box">
+        <h3>{{ confirmTitle }}</h3>
+        <p>{{ confirmMessage }}</p>
+        <div class="actions">
+          <button @click="handleConfirm(true)" class="btn-yes">Xác nhận</button>
+          <button @click="handleConfirm(false)" class="btn-no">Hủy</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from "vue";
+import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI } from "../api/api.js";
 
-// Danh mục & nhà cung cấp giả lập (ID là số)
+// ----- Fake categories & suppliers
 const categories = ref([
   { id: 1, name: "Điện thoại" },
   { id: 2, name: "Nước giải khát" },
@@ -107,110 +154,167 @@ const categories = ref([
   { id: 4, name: "Bánh kẹo" },
   { id: 5, name: "Snack" },
 ]);
-
 const suppliers = ref([
   { id: 1, name: "Samsung VN" },
   { id: 2, name: "Pepsi VN" },
   { id: 3, name: "Công ty ABC" },
 ]);
 
-// Dữ liệu sản phẩm mẫu giống database
-const products = ref([
-  { product_id: 1, category_id: 2, supplier_id: 1, product_name: 'Coca Cola lon', barcode: '8900000000001', price: 314838, unit: 'hộp' },
-  { product_id: 2, category_id: 1, supplier_id: 3, product_name: 'Pepsi lon', barcode: '8900000000002', price: 114807, unit: 'cái' },
-  { product_id: 3, category_id: 3, supplier_id: 3, product_name: 'Trà Xanh 0 độ', barcode: '8900000000003', price: 415725, unit: 'tuýp' },
-  { product_id: 4, category_id: 2, supplier_id: 1, product_name: 'Sting dâu', barcode: '8900000000004', price: 351670, unit: 'cái' },
-  { product_id: 5, category_id: 3, supplier_id: 2, product_name: 'Red Bull', barcode: '8900000000005', price: 402179, unit: 'lon' },
-  { product_id: 6, category_id: 2, supplier_id: 2, product_name: 'Bánh Oreo', barcode: '8900000000006', price: 209283, unit: 'chai' },
-  { product_id: 7, category_id: 5, supplier_id: 3, product_name: 'Bánh Chocopie', barcode: '8900000000007', price: 212528, unit: 'lon' },
-  { product_id: 8, category_id: 1, supplier_id: 2, product_name: 'Kẹo Alpenliebe', barcode: '8900000000008', price: 34313, unit: 'lon' },
-]);
-
-const product = ref({ product_id: null, category_id: "", supplier_id: "", product_name: "", barcode: "", price: "", unit: "pcs" });
+// ----- Products
+const products = ref([]);
+const loading = ref(true);
+const product = ref({
+  productId: null,
+  categoryId: "",
+  supplierId: "",
+  productName: "",
+  barcode: "",
+  price: "",
+  unit: "pcs",
+});
 const editMode = ref(false);
+const viewMode = ref(false);
 const searchText = ref("");
-const filterType = ref("product_id");
+const filterType = ref("productId");
 
-// 🔍 Lọc danh sách
+// ----- Pagination
+const currentPage = ref(1);
+const itemsPerPage = 10;
 const filteredProducts = computed(() => {
+  if (!products.value || products.value.length === 0) return [];
   const keyword = searchText.value.toLowerCase().trim();
-  if (!keyword) return products.value;
   return products.value.filter((p) => {
+    if (!p) return false;
+    if (!keyword) return true;
     const field = p[filterType.value];
-    if (field === undefined || field === null) return false;
+    if (field == null) return false;
     return String(field).toLowerCase().includes(keyword);
   });
 });
+const totalPages = computed(() => Math.ceil(filteredProducts.value.length / itemsPerPage));
+const paginatedProducts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredProducts.value.slice(start, end);
+});
 
-// 💾 Lưu sản phẩm
-function saveProduct() {
-  if (!editMode.value && products.value.some(p => p.barcode === product.value.barcode)) {
-    alert("Barcode đã tồn tại!");
-    return;
+// ----- Popup
+const showConfirm = ref(false);
+const confirmTitle = ref("");
+const confirmMessage = ref("");
+let confirmAction = null;
+
+// ----- Fetch products
+async function fetchProducts() {
+  try {
+    const data = await getProducts();
+    console.log("Data from backend:", data);
+    products.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải sản phẩm:", err);
+  } finally {
+    loading.value = false;
   }
+}
+fetchProducts();
 
-  if (editMode.value) {
-    const index = products.value.findIndex((p) => p.product_id === product.value.product_id);
-    if (index !== -1) products.value[index] = { ...product.value, price: Number(product.value.price) };
+// ----- Confirm Save
+function confirmSave() {
+  confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
+  confirmMessage.value = editMode.value
+    ? "Bạn có chắc muốn cập nhật sản phẩm này không?"
+    : "Bạn có chắc muốn thêm sản phẩm mới không?";
+  confirmAction = saveProduct;
+  showConfirm.value = true;
+}
+
+// ----- Confirm Delete
+function confirmDelete(id) {
+  confirmTitle.value = "Xác nhận xóa";
+  confirmMessage.value = "Bạn có chắc muốn xóa sản phẩm này không?";
+  confirmAction = () => deleteProduct(id);
+  showConfirm.value = true;
+}
+
+// ----- Handle Confirm
+function handleConfirm(confirmed) {
+  if (confirmed && confirmAction) confirmAction();
+  showConfirm.value = false;
+}
+
+// ----- Save product
+async function saveProduct() {
+  try {
+    if (editMode.value) {
+      await updateProduct(product.value.productId, product.value);
+    } else {
+      await addProduct(product.value);
+    }
+    await fetchProducts();
     editMode.value = false;
-  } else {
-    const nextId = products.value.length > 0 ? Math.max(...products.value.map(p => p.product_id)) + 1 : 1;
-    products.value.push({ ...product.value, product_id: nextId, price: Number(product.value.price) });
+    resetForm();
+  } catch (err) {
+    console.error("Lỗi khi lưu sản phẩm:", err);
+  }
+}
+
+// ----- Delete product
+async function deleteProduct(id) {
+  try {
+    await deleteProductAPI(id);
+    await fetchProducts();
+  } catch (err) {
+    console.error("Lỗi khi xóa sản phẩm:", err);
   }
   resetForm();
 }
 
-// ✏️ Sửa
+// ----- Edit / View / Close / Cancel
 function editProduct(p) {
   product.value = { ...p };
   editMode.value = true;
+  viewMode.value = false;
 }
-
-// 🗑️ Xóa
-function deleteProduct(id) {
-  products.value = products.value.filter((p) => p.product_id !== id);
+function viewProduct(p) {
+  if (!editMode.value) {
+    product.value = { ...p };
+    viewMode.value = true;
+  }
+}
+function closeView() {
+  viewMode.value = false;
   resetForm();
 }
-
-// ❌ Hủy
 function cancelEdit() {
   editMode.value = false;
   resetForm();
 }
 
-// 🔄 Reset form
-// 🔄 Reset form
+// ----- Reset form
 function resetForm() {
-  const nextId = products.value.length > 0 ? Math.max(...products.value.map(p => p.product_id)) + 1 : 1;
+  const nextId =
+    products.value.length > 0
+      ? Math.max(...products.value.map((p) => p?.productId || 0)) + 1
+      : 1;
   product.value = {
-    product_id: nextId, // số tự tăng
-    category_id: "",
-    supplier_id: "",
-    product_name: "",
+    productId: nextId,
+    categoryId: "",
+    supplierId: "",
+    productName: "",
     barcode: "",
     price: "",
-    unit: "pcs"
+    unit: "pcs",
   };
 }
 
-// Hiển thị ID dạng P001
+// ----- Helpers
 function displayId(id) {
+  if (id == null) return "-";
   return "P" + id.toString().padStart(3, "0");
 }
-
-
-// 🔧 Hàm phụ trợ
-function getCategoryName(id) {
-  return categories.value.find((c) => c.id === id)?.name || "-";
-}
-function getSupplierName(id) {
-  return suppliers.value.find((s) => s.id === id)?.name || "-";
-}
 function formatPrice(val) {
-  return Number(val).toLocaleString("vi-VN");
+  return Number(val || 0).toLocaleString("vi-VN");
 }
-
-resetForm();
 </script>
 
 <style scoped>
@@ -220,15 +324,12 @@ resetForm();
   border-radius: 10px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
-
-/* 📝 Form */
 .product-form {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
-/* 📋 Bảng */
 .product-table {
   width: 100%;
   border-collapse: collapse;
@@ -242,5 +343,43 @@ resetForm();
 .product-table th {
   background-color: #2c3e50;
   color: white;
+}
+.product-table tr:hover {
+  background-color: #f8f8f8;
+  cursor: pointer;
+}
+.product-table tr.active {
+  background-color: #e7f1ff;
+}
+.loading {
+  margin: 20px;
+  font-weight: bold;
+}
+.no-data {
+  margin: 20px;
+  font-style: italic;
+  color: gray;
+}
+.pagination {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+.pagination button {
+  padding: 4px 10px;
+  border: 1px solid #ccc;
+  background-color: white;
+  cursor: pointer;
+  color: black;
+  font-weight: bold;
+}
+.pagination button:hover {
+  background-color: #f0f0f0;
+}
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
