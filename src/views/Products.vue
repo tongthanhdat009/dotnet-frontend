@@ -209,13 +209,26 @@ async function fetchProducts() {
   try {
     const data = await getProducts();
     console.log("Data from backend:", data);
-    products.value = data;
+
+    // Chuyển đổi key từ PascalCase sang camelCase
+    products.value = data.map(item => ({
+      productId: item.ProductId,
+      categoryId: item.CategoryId,
+      categoryName: item.CategoryName,
+      supplierId: item.SupplierId,
+      supplierName: item.SupplierName,
+      productName: item.ProductName,
+      barcode: item.Barcode,
+      price: item.Price,
+      unit: item.Unit
+    }));
   } catch (err) {
     console.error("Lỗi khi tải sản phẩm:", err);
   } finally {
     loading.value = false;
   }
 }
+
 fetchProducts();
 
 // ----- Confirm Save
