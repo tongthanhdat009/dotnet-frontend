@@ -182,15 +182,30 @@ const currentPage = ref(1);
 const itemsPerPage = 10;
 const filteredProducts = computed(() => {
   if (!products.value || products.value.length === 0) return [];
+
   const keyword = searchText.value.toLowerCase().trim();
+  if (!keyword) return products.value;
+
   return products.value.filter((p) => {
     if (!p) return false;
-    if (!keyword) return true;
-    const field = p[filterType.value];
-    if (field == null) return false;
-    return String(field).toLowerCase().includes(keyword);
+    const fieldValue = p[filterType.value];
+    if (fieldValue == null) return false;
+
+    // 🔍 Nếu lọc theo ID
+    if (filterType.value === "productId") {
+      // Cho phép gõ kiểu "p1", "P001", hoặc chỉ "1"
+      const numericKeyword = keyword.replace(/\D/g, ""); // bỏ hết ký tự không phải số
+      if (!numericKeyword) return true; // nếu chỉ gõ chữ, vẫn hiển thị toàn bộ
+      return String(p.productId).includes(numericKeyword);
+    }
+
+    // 🔍 Các trường khác (tên sản phẩm, barcode, ...)
+    return String(fieldValue).toLowerCase().includes(keyword);
   });
 });
+
+
+
 const totalPages = computed(() => Math.ceil(filteredProducts.value.length / itemsPerPage));
 const paginatedProducts = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
@@ -322,9 +337,9 @@ function resetForm() {
 
 // ----- Helpers
 function displayId(id) {
-  if (id == null) return "-";
-  return "P" + id.toString().padStart(3, "0");
+  return id ?? "-";
 }
+
 function formatPrice(val) {
   return Number(val || 0).toLocaleString("vi-VN");
 }

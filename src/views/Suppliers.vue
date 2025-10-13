@@ -16,7 +16,7 @@
     <form class="supplier-form" @submit.prevent="confirmSave">
       <div class="form-group">
         <label>ID</label>
-        <input type="text" :value="displayId(supplier.id)" readonly />
+        <input v-model="supplier.id" type="text" readonly />
       </div>
 
       <div class="form-group">
@@ -60,15 +60,14 @@
         />
       </div>
 
-      <!-- Nút hành động -->
-        <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
-        <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
-        <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
+      <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+      <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
     </form>
 
-
     <!-- 📋 Bảng hiển thị -->
-    <table class="supplier-table">
+    <div v-if="loading" class="loading">Đang tải dữ liệu...</div>
+    <table v-else class="supplier-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -86,14 +85,14 @@
           :class="{ active: supplier.id === s.id && (editMode || viewMode) }"
           @click="viewSupplier(s)"
         >
-          <td>{{ displayId(s.id) }}</td>
+          <td>{{ s.id }}</td>
           <td>{{ s.name }}</td>
           <td>{{ s.phone }}</td>
           <td>{{ s.email }}</td>
           <td>{{ s.address }}</td>
           <td>
             <button @click.stop="confirmEdit(s)">✏️</button>
-            <button @click.stop="confirmDelete(s)">🗑️</button>
+            <button @click.stop="confirmDelete(s.id)">🗑️</button>
           </td>
         </tr>
         <tr v-if="filteredSuppliers.length === 0">
@@ -108,8 +107,8 @@
         <h3>{{ confirmTitle }}</h3>
         <p>{{ confirmMessage }}</p>
         <div class="actions">
-          <button @click="handleConfirm" class="btn-yes">Xác nhận</button>
-          <button @click="closeConfirm" class="btn-no">Hủy</button>
+          <button @click="handleConfirmYes" class="btn-yes">Xác nhận</button>
+          <button @click="handleConfirmNo" class="btn-no">Hủy</button>
         </div>
       </div>
     </div>
@@ -118,135 +117,164 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import {
+  getSuppliers,
+  addSupplier,
+  updateSupplier,
+  deleteSupplier,
+} from "../api/Suppliers.js";
 
-const suppliers = ref([
-  { id: 1, name: "Samsung VN", phone: "0901234567", email: "samsung@vn.com", address: "Hà Nội" },
-  { id: 2, name: "Pepsi VN", phone: "0912345678", email: "pepsi@vn.com", address: "TP.HCM" },
-  { id: 3, name: "Công ty ABC", phone: "0923456789", email: "abc@company.com", address: "Đà Nẵng" },
-]);
-
-const supplier = ref({ id: null, name: "", phone: "", email: "", address: "" });
+const suppliers = ref([]);
+const supplier = ref({ id: "", name: "", phone: "", email: "", address: "" });
+const loading = ref(true);
 const editMode = ref(false);
 const viewMode = ref(false);
+
 const searchText = ref("");
 const filterType = ref("id");
 
-// Popup state
-const showConfirm = ref(false);
-const confirmTitle = ref("");
-const confirmMessage = ref("");
-let confirmAction = null;
-
-// Lọc danh sách
+// 🔍 Lọc danh sách
 const filteredSuppliers = computed(() => {
   const keyword = searchText.value.toLowerCase().trim();
   if (!keyword) return suppliers.value;
   return suppliers.value.filter((s) => {
     const field = s[filterType.value];
-    if (field === undefined || field === null) return false;
+    if (!field) return false;
     return String(field).toLowerCase().includes(keyword);
   });
 });
 
-// Hiển thị ID dạng S001
-function displayId(id) {
-  return "S" + id.toString().padStart(3, "0");
+// ⚙️ Tải dữ liệu từ backend
+async function fetchSuppliers() {
+  try {
+    loading.value = true;
+    const data = await getSuppliers();
+    suppliers.value = data.map((s) => ({
+      id: s.SupplierId,
+      name: s.Name,
+      phone: s.Phone,
+      email: s.Email,
+      address: s.Address,
+    }));
+  } catch (err) {
+    console.error("Lỗi khi tải nhà cung cấp:", err);
+  } finally {
+    loading.value = false;
+  }
 }
 
-// 🆕 Sinh ID tiếp theo
-function nextId() {
-  return suppliers.value.length > 0 ? Math.max(...suppliers.value.map((s) => s.id)) + 1 : 1;
+
+// ✅ Popup xác nhận
+const showConfirm = ref(false);
+const confirmTitle = ref("");
+const confirmMessage = ref("");
+let confirmAction = null;
+
+function handleConfirmYes() {
+  if (confirmAction) confirmAction();
+  showConfirm.value = false;
+}
+function handleConfirmNo() {
+  showConfirm.value = false;
 }
 
-// ====== CRUD với popup ======
+// 💾 Lưu (Thêm hoặc Sửa)
+async function saveSupplier() {
+  try {
+    if (editMode.value) {
+      await updateSupplier(supplier.value.id, supplier.value);
+    } else {
+      const created = await addSupplier(supplier.value);
+      supplier.value.id = created.supplierId ?? created.id;
+    }
+    await fetchSuppliers();
+    resetForm();
+  } catch (err) {
+    console.error("Lỗi khi lưu nhà cung cấp:", err);
+  }
+}
+
 function confirmSave() {
   confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
   confirmMessage.value = editMode.value
-    ? "Bạn có chắc muốn cập nhật thông tin nhà cung cấp này?"
-    : "Bạn có chắc muốn thêm nhà cung cấp mới?";
+    ? `Bạn có chắc muốn cập nhật nhà cung cấp "${supplier.value.name}" không?`
+    : `Bạn có chắc muốn thêm nhà cung cấp "${supplier.value.name}" không?`;
   confirmAction = saveSupplier;
   showConfirm.value = true;
-}
-
-function saveSupplier() {
-  if (editMode.value) {
-    const index = suppliers.value.findIndex((s) => s.id === supplier.value.id);
-    if (index !== -1) suppliers.value[index] = { ...supplier.value };
-    editMode.value = false;
-  } else {
-    suppliers.value.push({ ...supplier.value, id: nextId() });
-  }
-  resetForm();
-  showConfirm.value = false;
 }
 
 // ✏️ Sửa
 function confirmEdit(s) {
   confirmTitle.value = "Xác nhận chỉnh sửa";
-  confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin nhà cung cấp này?";
-  confirmAction = () => editSupplier(s);
+  confirmMessage.value = `Bạn có muốn chỉnh sửa nhà cung cấp "${s.name}"?`;
+  confirmAction = () => {
+    supplier.value = { ...s };
+    editMode.value = true;
+    viewMode.value = false;
+  };
   showConfirm.value = true;
 }
-function editSupplier(s) {
-  supplier.value = { ...s };
-  editMode.value = true;
-  viewMode.value = false;
-  showConfirm.value = false;
+
+// 🗑️ Xóa
+async function deleteSupplierById(id) {
+  try {
+    await deleteSupplier(id);
+    await fetchSuppliers();
+    resetForm();
+  } catch (err) {
+    console.error("Lỗi khi xóa:", err);
+  }
 }
 
-// 👁️ Xem (khi click dòng)
+function confirmDelete(id) {
+  const target = suppliers.value.find((s) => s.id === id);
+  confirmTitle.value = "Xác nhận xóa";
+  confirmMessage.value = `Bạn có chắc muốn xóa nhà cung cấp "${target?.name}" không?`;
+  confirmAction = () => deleteSupplierById(id);
+  showConfirm.value = true;
+}
+
+// 👁️ Xem chi tiết
 function viewSupplier(s) {
   if (!editMode.value) {
     supplier.value = { ...s };
     viewMode.value = true;
   }
 }
+
+// 🔙 Hủy / Đóng
 function closeView() {
   viewMode.value = false;
   resetForm();
 }
-
-// 🗑️ Xóa
-function confirmDelete(s) {
-  confirmTitle.value = "Xác nhận xóa";
-  confirmMessage.value = `Bạn có chắc muốn xóa nhà cung cấp "${s.name}" không?`;
-  confirmAction = () => deleteSupplier(s.id);
-  showConfirm.value = true;
-}
-function deleteSupplier(id) {
-  suppliers.value = suppliers.value.filter((s) => s.id !== id);
-  resetForm();
-  showConfirm.value = false;
-}
-
-// ❌ Hủy sửa
 function cancelEdit() {
   editMode.value = false;
   resetForm();
 }
 
-// ✅ Popup
-function handleConfirm() {
-  if (confirmAction) confirmAction();
-}
-function closeConfirm() {
-  showConfirm.value = false;
+// 🔄 Reset form
+function resetForm() {
+  supplier.value = { id: "", name: "", phone: "", email: "", address: "" };
 }
 
-// 🔄 Reset
-function resetForm() {
-  supplier.value = { id: nextId(), name: "", phone: "", email: "", address: "" };
-}
-resetForm();
+fetchSuppliers();
 </script>
 
-
 <style scoped>
+
+
 .suppliers-page {
   background: white;
   padding: 20px;
   border-radius: 10px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 .supplier-form {
@@ -274,15 +302,13 @@ resetForm();
   background-color: #f8f8f8;
   cursor: pointer;
 }
-
 .supplier-table tr.active {
   background-color: #e7f1ff;
 }
 
-.form-actions {
-  grid-column: span 2;
-  display: flex;
-  gap: 10px;
+.loading {
+  margin: 20px;
+  font-weight: bold;
+  text-align: center;
 }
-
 </style>

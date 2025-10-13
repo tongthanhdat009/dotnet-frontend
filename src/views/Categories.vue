@@ -22,7 +22,13 @@
 
       <div class="form-group">
         <label>Tên danh mục</label>
-        <input v-model="category.name" type="text" :readonly="viewMode && !editMode" placeholder="Tên danh mục" required />
+        <input
+          v-model="category.name"
+          type="text"
+          :readonly="viewMode && !editMode"
+          placeholder="Tên danh mục"
+          required
+        />
       </div>
 
       <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
@@ -31,7 +37,8 @@
     </form>
 
     <!-- 📋 Bảng hiển thị -->
-    <table class="category-table">
+    <div v-if="loading" class="loading">Đang tải danh mục...</div>
+    <table v-else class="category-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -75,17 +82,20 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import {
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory as deleteCategoryAPI,
+} from "../api/Category.js";
 
-// 🧩 Dữ liệu mẫu
-const categories = ref([
-  { id: "CAT01", name: "Điện thoại" },
-  { id: "CAT02", name: "Laptop" },
-  { id: "CAT03", name: "Phụ kiện" },
-]);
+// 🧩 Dữ liệu
+const categories = ref([]);
+const loading = ref(true);
 
 const category = ref({ id: "", name: "" });
 const editMode = ref(false);
-const viewMode = ref(false); // 👁️ thêm biến chế độ xem
+const viewMode = ref(false);
 
 const searchText = ref("");
 const filterType = ref("id");
@@ -105,19 +115,20 @@ const confirmTitle = ref("");
 const confirmMessage = ref("");
 let confirmAction = null;
 
-// 🆕 Sinh ID tự động
-function generateNextId() {
-  if (categories.value.length === 0) return "CAT01";
-  const lastNum = Math.max(...categories.value.map((c) => parseInt(c.id.substring(3))));
-  return "CAT" + (lastNum + 1).toString().padStart(2, "0");
-}
-
-// ⚡ Mở popup xác nhận
-function openConfirm(title, message, action) {
-  confirmTitle.value = title;
-  confirmMessage.value = message;
-  confirmAction = action;
-  showConfirm.value = true;
+// ⚡ Lấy danh mục từ backend
+async function fetchCategories() {
+  try {
+    const data = await getCategories();
+    // Chuyển đổi key từ PascalCase sang camelCase nếu backend trả PascalCase
+    categories.value = data.map((item) => ({
+      id: item.CategoryId ?? item.id,
+      name: item.CategoryName ?? item.name,
+    }));
+  } catch (err) {
+    console.error("Lỗi khi tải danh mục:", err);
+  } finally {
+    loading.value = false;
+  }
 }
 
 // 🔘 Xử lý xác nhận
@@ -129,27 +140,39 @@ function handleConfirmNo() {
   showConfirm.value = false;
 }
 
-// 💾 Lưu danh mục (gốc)
-function saveCategory() {
-  if (editMode.value) {
-    const index = categories.value.findIndex((c) => c.id === category.value.id);
-    if (index !== -1) categories.value[index] = { ...category.value };
+// 💾 Lưu danh mục
+async function saveCategory() {
+  try {
+    if (editMode.value) {
+      // ✅ Chế độ cập nhật
+      await updateCategory(category.value.id, category.value);
+    } else {
+      // ✅ Thêm mới: chỉ gửi name, backend tự sinh ID
+      const created = await addCategory(category.value);
+      // Gán lại ID vừa tạo để hiển thị luôn
+      category.value.id = created.CategoryId ?? created.id;
+    }
+
+    // ✅ Sau khi thêm hoặc cập nhật, tải lại danh sách
+    await fetchCategories();
+
+    // ✅ Reset form về rỗng
     editMode.value = false;
-  } else {
-    categories.value.push({ ...category.value });
+    resetForm();
+  } catch (err) {
+    console.error("Lỗi khi lưu danh mục:", err);
   }
-  resetForm();
 }
+
 
 // 💾 Xác nhận trước khi lưu
 function confirmSave() {
-  openConfirm(
-    editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới",
-    editMode.value
-      ? `Bạn có chắc muốn cập nhật danh mục "${category.value.name}" không?`
-      : `Bạn có chắc muốn thêm danh mục "${category.value.name}" không?`,
-    saveCategory
-  );
+  confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
+  confirmMessage.value = editMode.value
+    ? `Bạn có chắc muốn cập nhật danh mục "${category.value.name}" không?`
+    : `Bạn có chắc muốn thêm danh mục "${category.value.name}" không?`;
+  confirmAction = saveCategory;
+  showConfirm.value = true;
 }
 
 // ✏️ Chỉnh sửa
@@ -158,29 +181,32 @@ function editCategory(c) {
   editMode.value = true;
   viewMode.value = false;
 }
-
-// ✏️ Xác nhận chỉnh sửa
 function confirmEdit(c) {
-  openConfirm("Xác nhận chỉnh sửa", `Bạn muốn chỉnh sửa danh mục "${c.name}"?`, () =>
-    editCategory(c)
-  );
+  confirmTitle.value = "Xác nhận chỉnh sửa";
+  confirmMessage.value = `Bạn muốn chỉnh sửa danh mục "${c.name}"?`;
+  confirmAction = () => editCategory(c);
+  showConfirm.value = true;
 }
 
 // 🗑️ Xóa
-function deleteCategory(id) {
-  categories.value = categories.value.filter((c) => c.id !== id);
+async function deleteCategory(id) {
+  try {
+    await deleteCategoryAPI(id);
+    await fetchCategories();
+  } catch (err) {
+    console.error("Lỗi khi xóa danh mục:", err);
+  }
   resetForm();
 }
-
-// 🗑️ Xác nhận xóa
 function confirmDelete(id) {
   const target = categories.value.find((c) => c.id === id);
-  openConfirm("Xác nhận xóa", `Bạn có chắc muốn xóa danh mục "${target.name}"?`, () =>
-    deleteCategory(id)
-  );
+  confirmTitle.value = "Xác nhận xóa";
+  confirmMessage.value = `Bạn có chắc muốn xóa danh mục "${target?.name}"?`;
+  confirmAction = () => deleteCategory(id);
+  showConfirm.value = true;
 }
 
-// 👁️ Xem chi tiết khi click dòng
+// 👁️ Xem chi tiết
 function viewCategory(c) {
   if (!editMode.value) {
     category.value = { ...c };
@@ -202,10 +228,10 @@ function cancelEdit() {
 
 // 🔄 Reset form
 function resetForm() {
-  category.value = { id: generateNextId(), name: "" };
+  category.value = { id: "", name: "" };
 }
 
-resetForm();
+fetchCategories();
 </script>
 
 <style scoped>
@@ -258,19 +284,16 @@ resetForm();
   background-color: #2c3e50;
   color: white;
 }
-
 .category-table tr:hover {
   background-color: #f8f8f8;
   cursor: pointer;
 }
-
-.category -table tr.active {
+.category-table tr.active {
   background-color: #e7f1ff;
 }
 
-.form-actions {
-  grid-column: span 2;
-  display: flex;
-  gap: 10px;
+.loading {
+  margin: 20px;
+  font-weight: bold;
 }
 </style>
