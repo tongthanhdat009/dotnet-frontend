@@ -6,40 +6,45 @@
     <div class="search-bar">
       <label for="filterType">Tìm theo:</label>
       <select v-model="filterType" id="filterType">
-        <option value="productId">ID</option>
-        <option value="productName">Tên sản phẩm</option>
-        <option value="barcode">Mã vạch</option>
+        <option value="all">Tất cả</option>
+        <option value="ProductId">ID</option>
+        <option value="ProductName">Tên sản phẩm</option>
+        <option value="CategoryName">Danh mục</option>
+        <option value="SupplierName">Nhà cung cấp</option>
+        <option value="Barcode">Mã vạch</option>
+        <option value="Price">Giá</option>
+        <option value="Unit">Đơn vị</option>
       </select>
-      <input type="text" v-model="searchText" placeholder="Nhập từ khóa..." />
+      <input type="text" v-model="searchText" :placeholder="getSearchPlaceholder()" />
     </div>
 
     <!-- 📝 Form thêm / sửa / xem -->
     <form class="product-form" @submit.prevent="confirmSave">
       <div class="form-group">
         <label>ID</label>
-        <input type="text" :value="displayId(product.productId)" readonly />
+        <input type="text" :value="displayId(product.ProductId)" readonly />
       </div>
 
       <div class="form-group">
         <label>Danh mục (Category ID)</label>
-        <select v-model="product.categoryId" :disabled="viewMode && !editMode">
+        <select v-model="product.CategoryId" :disabled="viewMode && !editMode">
           <option disabled value="">-- Chọn danh mục --</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          <option v-for="c in categories" :key="c.categoryId" :value="c.CategoryId">{{ c.CategoryName }}</option>
         </select>
       </div>
 
       <div class="form-group">
         <label>Nhà cung cấp (Supplier ID)</label>
-        <select v-model="product.supplierId" :disabled="viewMode && !editMode">
+        <select v-model="product.SupplierId" :disabled="viewMode && !editMode">
           <option disabled value="">-- Chọn NCC --</option>
-          <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
+          <option v-for="s in suppliers" :key="s.SupplierId" :value="s.SupplierId">{{ s.Name }}</option>
         </select>
       </div>
 
       <div class="form-group">
         <label>Tên sản phẩm</label>
         <input
-          v-model="product.productName"
+          v-model="product.ProductName"
           type="text"
           required
           placeholder="Nhập tên sản phẩm"
@@ -50,7 +55,7 @@
       <div class="form-group">
         <label>Mã vạch</label>
         <input
-          v-model="product.barcode"
+          v-model="product.Barcode"
           type="text"
           placeholder="Nhập barcode"
           :readonly="viewMode && !editMode"
@@ -60,7 +65,7 @@
       <div class="form-group">
         <label>Giá</label>
         <input
-          v-model="product.price"
+          v-model="product.Price"
           type="number"
           step="0.01"
           required
@@ -71,7 +76,7 @@
       <div class="form-group">
         <label>Đơn vị</label>
         <input
-          v-model="product.unit"
+          v-model="product.Unit"
           type="text"
           placeholder="Ví dụ: cái, hộp, chiếc..."
           :readonly="viewMode && !editMode"
@@ -102,20 +107,20 @@
       <tbody>
         <tr
           v-for="p in paginatedProducts"
-          :key="p?.productId ?? Math.random()"
+          :key="p?.ProductId ?? Math.random()"
           @click="viewProduct(p)"
-          :class="{ active: viewMode && product.productId === p?.productId }"
+          :class="{ active: viewMode && product.ProductId === p?.ProductId }"
         >
-          <td>{{ displayId(p?.productId) }}</td>
-          <td>{{ p?.categoryName || '-' }}</td>
-          <td>{{ p?.supplierName || '-' }}</td>
-          <td>{{ p?.productName || '-' }}</td>
-          <td>{{ p?.barcode || '-' }}</td>
-          <td>{{ formatPrice(p?.price) }}</td>
-          <td>{{ p?.unit || '-' }}</td>
+          <td>{{ displayId(p?.ProductId) }}</td>
+          <td>{{ p?.CategoryName || '-' }}</td>
+          <td>{{ p?.SupplierName || '-' }}</td>
+          <td>{{ p?.ProductName || '-' }}</td>
+          <td>{{ p?.Barcode || '-' }}</td>
+          <td>{{ formatPrice(p?.Price) }}</td>
+          <td>{{ p?.Unit || '-' }}</td>
           <td>
             <button @click.stop="editProduct(p)">✏️</button>
-            <button @click.stop="confirmDelete(p?.productId)">🗑️</button>
+            <button @click.stop="confirmDelete(p?.ProductId)">🗑️</button>
           </td>
         </tr>
       </tbody>
@@ -139,43 +144,45 @@
         </div>
       </div>
     </div>
+
+    <!-- 🚨 Thông báo lỗi -->
+    <div v-if="errorMessage" class="error-message">
+      <p>{{ errorMessage }}</p>
+      <button @click="errorMessage = ''">Đóng</button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
-import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI } from "../api/api.js";
+import { ref, computed, onMounted } from "vue";
+import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI } from "../api/Product.js";
+import { getCategories } from "../api/Category.js";
+import { getSuppliers } from "../api/Suppliers.js";
 
-// ----- Fake categories & suppliers
-const categories = ref([
-  { id: 1, name: "Điện thoại" },
-  { id: 2, name: "Nước giải khát" },
-  { id: 3, name: "Trà & Cà phê" },
-  { id: 4, name: "Bánh kẹo" },
-  { id: 5, name: "Snack" },
-]);
-const suppliers = ref([
-  { id: 1, name: "Samsung VN" },
-  { id: 2, name: "Pepsi VN" },
-  { id: 3, name: "Công ty ABC" },
-]);
+// ----- Categories & Suppliers từ API
+const categories = ref([]);
+const suppliers = ref([]);
 
 // ----- Products
 const products = ref([]);
 const loading = ref(true);
 const product = ref({
-  productId: null,
-  categoryId: "",
-  supplierId: "",
-  productName: "",
-  barcode: "",
-  price: "",
-  unit: "pcs",
+  ProductId: null,
+  CategoryId: null,
+  SupplierId: null,
+  ProductName: "",
+  Barcode: "",
+  Price: 0,
+  Unit: "pcs",
+  CategoryId: null,
+  SupplierId: null,
+  ProductId: null,
 });
 const editMode = ref(false);
 const viewMode = ref(false);
 const searchText = ref("");
-const filterType = ref("productId");
+const filterType = ref("ProductId");
+const errorMessage = ref("");
 
 // ----- Pagination
 const currentPage = ref(1);
@@ -183,28 +190,47 @@ const itemsPerPage = 10;
 const filteredProducts = computed(() => {
   if (!products.value || products.value.length === 0) return [];
 
-  const keyword = searchText.value.toLowerCase().trim();
+  const keyword = searchText.value.trim();
   if (!keyword) return products.value;
 
   return products.value.filter((p) => {
     if (!p) return false;
+
+    if (filterType.value === "all") {
+      // Tìm kiếm trong tất cả các trường có trong bảng
+      return (
+        vietnameseIncludes(p.ProductId, keyword) ||
+        vietnameseIncludes(p.ProductName, keyword) ||
+        vietnameseIncludes(p.CategoryName, keyword) ||
+        vietnameseIncludes(p.SupplierName, keyword) ||
+        vietnameseIncludes(p.Barcode, keyword) ||
+        vietnameseIncludes(p.Price, keyword) ||
+        vietnameseIncludes(p.Unit, keyword)
+      );
+    }
+
     const fieldValue = p[filterType.value];
     if (fieldValue == null) return false;
 
     // 🔍 Nếu lọc theo ID
-    if (filterType.value === "productId") {
+    if (filterType.value === "ProductId") {
       // Cho phép gõ kiểu "p1", "P001", hoặc chỉ "1"
       const numericKeyword = keyword.replace(/\D/g, ""); // bỏ hết ký tự không phải số
-      if (!numericKeyword) return true; // nếu chỉ gõ chữ, vẫn hiển thị toàn bộ
-      return String(p.productId).includes(numericKeyword);
+      if (!numericKeyword) return vietnameseIncludes(fieldValue, keyword); // nếu chỉ gõ chữ, tìm theo tên
+      return String(p.ProductId).includes(numericKeyword) || vietnameseIncludes(fieldValue, keyword);
     }
 
-    // 🔍 Các trường khác (tên sản phẩm, barcode, ...)
-    return String(fieldValue).toLowerCase().includes(keyword);
+    // 🔍 Tìm kiếm theo giá - hỗ trợ tìm một phần của số
+    if (filterType.value === "Price") {
+      const priceStr = String(fieldValue);
+      const formattedPrice = formatPrice(fieldValue);
+      return priceStr.includes(keyword) || formattedPrice.includes(keyword);
+    }
+
+    // 🔍 Các trường khác - sử dụng tìm kiếm tiếng Việt
+    return vietnameseIncludes(fieldValue, keyword);
   });
 });
-
-
 
 const totalPages = computed(() => Math.ceil(filteredProducts.value.length / itemsPerPage));
 const paginatedProducts = computed(() => {
@@ -219,32 +245,40 @@ const confirmTitle = ref("");
 const confirmMessage = ref("");
 let confirmAction = null;
 
-// ----- Fetch products
+// ----- Fetch data
+async function fetchCategories() {
+  try {
+    const data = await getCategories();
+    categories.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải categories:", err);
+    errorMessage.value = "Không thể tải danh sách danh mục";
+  }
+}
+
+async function fetchSuppliers() {
+  try {
+    const data = await getSuppliers();
+    suppliers.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải suppliers:", err);
+    errorMessage.value = "Không thể tải danh sách nhà cung cấp";
+  }
+}
+
 async function fetchProducts() {
   try {
+    loading.value = true;
     const data = await getProducts();
     console.log("Data from backend:", data);
-
-    // Chuyển đổi key từ PascalCase sang camelCase
-    products.value = data.map(item => ({
-      productId: item.ProductId,
-      categoryId: item.CategoryId,
-      categoryName: item.CategoryName,
-      supplierId: item.SupplierId,
-      supplierName: item.SupplierName,
-      productName: item.ProductName,
-      barcode: item.Barcode,
-      price: item.Price,
-      unit: item.Unit
-    }));
+    products.value = data; // Backend đã trả về đúng format
   } catch (err) {
     console.error("Lỗi khi tải sản phẩm:", err);
+    errorMessage.value = "Không thể tải danh sách sản phẩm";
   } finally {
     loading.value = false;
   }
 }
-
-fetchProducts();
 
 // ----- Confirm Save
 function confirmSave() {
@@ -273,46 +307,87 @@ function handleConfirm(confirmed) {
 // ----- Save product
 async function saveProduct() {
   try {
-    if (editMode.value) {
-      await updateProduct(product.value.productId, product.value);
-    } else {
-      await addProduct(product.value);
+    errorMessage.value = "";
+    
+    // Validate required fields
+    if (!product.value.ProductName.trim()) {
+      errorMessage.value = "Tên sản phẩm không được để trống";
+      return;
     }
+    
+    if (!product.value.Price || product.value.Price <= 0) {
+      errorMessage.value = "Giá phải lớn hơn 0";
+      return;
+    }
+
+    const productData = {
+      ProductId: product.value.ProductId,
+      ProductName: product.value.ProductName.trim(),
+      Price: parseFloat(product.value.Price),
+      Barcode: product.value.Barcode?.trim() || null,
+      Unit: product.value.Unit?.trim() || "pcs",
+      CategoryId: product.value.CategoryId || null,
+      SupplierId: product.value.SupplierId || null
+    };
+
+    if (editMode.value) {
+      await updateProduct(product.value.ProductId, productData);
+    } else {
+      // Xóa ProductId khi tạo mới
+      delete productData.ProductId;
+      await addProduct(productData);
+    }
+    
     await fetchProducts();
     editMode.value = false;
     resetForm();
   } catch (err) {
     console.error("Lỗi khi lưu sản phẩm:", err);
+    if (err.response?.data?.message) {
+      errorMessage.value = err.response.data.message;
+    } else {
+      errorMessage.value = "Có lỗi xảy ra khi lưu sản phẩm";
+    }
   }
 }
 
 // ----- Delete product
 async function deleteProduct(id) {
   try {
+    errorMessage.value = "";
     await deleteProductAPI(id);
     await fetchProducts();
+    resetForm();
   } catch (err) {
     console.error("Lỗi khi xóa sản phẩm:", err);
+    if (err.response?.data?.message) {
+      errorMessage.value = err.response.data.message;
+    } else {
+      errorMessage.value = "Có lỗi xảy ra khi xóa sản phẩm";
+    }
   }
-  resetForm();
 }
 
 // ----- Edit / View / Close / Cancel
 function editProduct(p) {
   product.value = { ...p };
+
   editMode.value = true;
   viewMode.value = false;
 }
+
 function viewProduct(p) {
   if (!editMode.value) {
     product.value = { ...p };
     viewMode.value = true;
   }
 }
+
 function closeView() {
   viewMode.value = false;
   resetForm();
 }
+
 function cancelEdit() {
   editMode.value = false;
   resetForm();
@@ -320,18 +395,14 @@ function cancelEdit() {
 
 // ----- Reset form
 function resetForm() {
-  const nextId =
-    products.value.length > 0
-      ? Math.max(...products.value.map((p) => p?.productId || 0)) + 1
-      : 1;
   product.value = {
-    productId: nextId,
-    categoryId: "",
-    supplierId: "",
-    productName: "",
-    barcode: "",
-    price: "",
-    unit: "pcs",
+    ProductId: null,
+    CategoryId: null,
+    SupplierId: null,
+    ProductName: "",
+    Barcode: "",
+    Price: 0,
+    Unit: "pcs",
   };
 }
 
@@ -343,71 +414,76 @@ function displayId(id) {
 function formatPrice(val) {
   return Number(val || 0).toLocaleString("vi-VN");
 }
+
+function getSearchPlaceholder() {
+  switch (filterType.value) {
+    case "all":
+      return "Nhập từ khóa tìm kiếm...";
+    case "ProductId":
+      return "Nhập ID sản phẩm...";
+    case "ProductName":
+      return "Nhập tên sản phẩm...";
+    case "CategoryName":
+      return "Nhập tên danh mục...";
+    case "SupplierName":
+      return "Nhập tên nhà cung cấp...";
+    case "Barcode":
+      return "Nhập mã vạch...";
+    case "Price":
+      return "Nhập giá sản phẩm...";
+    case "Unit":
+      return "Nhập đơn vị...";
+    default:
+      return "Nhập từ khóa...";
+  }
+}
+
+// Hàm chuyển đổi tiếng Việt có dấu thành không dấu
+function removeVietnameseTones(str) {
+  if (!str) return "";
+  
+  const accentsMap = {
+    'a': 'aàáạảãâầấậẩẫăằắặẳẵ',
+    'd': 'dđ',
+    'e': 'eèéẹẻẽêềếệểễ',
+    'i': 'iìíịỉĩ',
+    'o': 'oòóọỏõôồốộổỗơờớợởỡ',
+    'u': 'uùúụủũưừứựửữ',
+    'y': 'yỳýỵỷỹ'
+  };
+
+  let result = str.toLowerCase();
+  
+  for (const [baseChar, accented] of Object.entries(accentsMap)) {
+    const regex = new RegExp(`[${accented}]`, 'g');
+    result = result.replace(regex, baseChar);
+  }
+  
+  return result;
+}
+
+// Hàm so sánh chuỗi có hỗ trợ tiếng Việt
+function vietnameseIncludes(text, keyword) {
+  if (!text || !keyword) return false;
+  
+  const normalizedText = removeVietnameseTones(String(text));
+  const normalizedKeyword = removeVietnameseTones(keyword);
+  
+  // Tìm kiếm cả bản gốc và bản không dấu
+  return String(text).toLowerCase().includes(keyword.toLowerCase()) ||
+         normalizedText.includes(normalizedKeyword);
+}
+
+// ----- Mount
+onMounted(async () => {
+  await Promise.all([
+    fetchCategories(),
+    fetchSuppliers(),
+    fetchProducts()
+  ]);
+});
 </script>
 
-<style scoped>
-.products-page {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-.product-form {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.product-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.product-table th,
-.product-table td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: center;
-}
-.product-table th {
-  background-color: #2c3e50;
-  color: white;
-}
-.product-table tr:hover {
-  background-color: #f8f8f8;
-  cursor: pointer;
-}
-.product-table tr.active {
-  background-color: #e7f1ff;
-}
-.loading {
-  margin: 20px;
-  font-weight: bold;
-}
-.no-data {
-  margin: 20px;
-  font-style: italic;
-  color: gray;
-}
-.pagination {
-  margin-top: 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-}
-.pagination button {
-  padding: 4px 10px;
-  border: 1px solid #ccc;
-  background-color: white;
-  cursor: pointer;
-  color: black;
-  font-weight: bold;
-}
-.pagination button:hover {
-  background-color: #f0f0f0;
-}
-.pagination button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+<style >
+@import "./src/assets/css/product.css";
 </style>
