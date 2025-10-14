@@ -485,5 +485,5 @@ onMounted(async () => {
 </script>
 
 <style >
-@import "./src/assets/css/product.css";
+@import "../assets/css/product.css";
 </style>
