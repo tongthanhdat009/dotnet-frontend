@@ -115,13 +115,12 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { getUsers, addUser, updateUser, deleteUser as deleteUserAPI } from "../api/Users.js";
+import { getUsers, addUser } from "../api/Users.js";
 
 // ===== State =====
-const users = ref([]); // UI model [{ id, name, password, full_name, role }]
+const users = ref([]); // danh sách hiển thị (UI model)
 const user  = ref({ id: "", name: "", password: "", full_name: "", role: "staff" });
 
 const editMode = ref(false);
@@ -130,8 +129,8 @@ const searchText = ref("");
 const filterType = ref("id");
 
 const loading = ref(true);
-const saving = ref(false);
 const errorMessage = ref("");
+const saving = ref(false);
 
 // ===== Mapping DTO <-> UI =====
 const roleIdToName = (id) => (id === 1 ? "admin" : "staff");
@@ -141,7 +140,7 @@ function toUi(dto) {
   return {
     id:        String(dto.UserId ?? ""),
     name:      dto.Username ?? "",
-    // ⚠️ API thật KHÔNG nên trả Password; đây chỉ map theo DTO hiện có
+    // ⚠️ API thật KHÔNG nên trả Password; giữ nguyên theo DTO bạn đang dùng
     password:  dto.Password ?? "",
     full_name: dto.FullName ?? "",
     role:      roleIdToName(dto.Role ?? 2),
@@ -150,6 +149,7 @@ function toUi(dto) {
 
 function toDto(u) {
   return {
+    // UserId để backend tự sinh -> không gửi khi create
     Username: u.name?.trim(),
     Password: u.password?.trim(),
     FullName: u.full_name?.trim() || null,
@@ -164,7 +164,8 @@ async function loadUsers() {
     errorMessage.value = "";
     const data = await getUsers();
     users.value = Array.isArray(data) ? data.map(toUi) : [];
-    setSuggestedId(); // gợi ý ID mới
+    // sau khi nạp xong -> set gợi ý ID cho form
+    setSuggestedId();
   } catch (err) {
     console.error("Get users error:", err);
     errorMessage.value = err?.response?.data?.message || "Không thể tải danh sách người dùng.";
@@ -172,6 +173,7 @@ async function loadUsers() {
     loading.value = false;
   }
 }
+
 onMounted(loadUsers);
 
 // ===== Gợi ý ID: max(UserId) + 1 =====
@@ -179,10 +181,13 @@ function getNextIdSuggestion() {
   const list = Array.isArray(users.value) ? users.value : [];
   if (list.length === 0) return "1";
   const maxNum = Math.max(
-    ...list.map(u => Number(u.id)).filter(n => Number.isFinite(n))
+    ...list
+      .map(u => Number(u.id))
+      .filter(n => Number.isFinite(n))
   );
   return String(maxNum + 1);
 }
+
 function setSuggestedId() {
   user.value.id = getNextIdSuggestion(); // readonly, chỉ hiển thị
 }
@@ -192,7 +197,11 @@ const filteredUsers = computed(() => {
   const list = Array.isArray(users.value) ? users.value : [];
   const kw = searchText.value.toLowerCase().trim();
   if (!kw) return list;
-  return list.filter((u) => String(u[filterType.value] ?? "").toLowerCase().includes(kw));
+
+  return list.filter((u) => {
+    const val = String(u[filterType.value] ?? "").toLowerCase();
+    return val.includes(kw);
+  });
 });
 
 // ===== Popup xác nhận =====
@@ -201,6 +210,7 @@ const confirmTitle = ref("");
 const confirmMessage = ref("");
 let confirmAction = null;
 
+// Thêm hoặc sửa
 function confirmSave() {
   confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
   confirmMessage.value = editMode.value
@@ -215,36 +225,34 @@ async function saveUser() {
     errorMessage.value = "";
     saving.value = true;
 
-    // Validate cơ bản
-    if (!user.value.name?.trim()) {
-      errorMessage.value = "Tên đăng nhập là bắt buộc.";
-      return;
-    }
-    if (!user.value.password?.trim()) {
-      errorMessage.value = "Mật khẩu là bắt buộc.";
-      return;
-    }
-
-    const dto = toDto(user.value);
-
-    if (editMode.value) {
-      // === UPDATE ===
-      await updateUser(Number(user.value.id), dto);
-    } else {
+    if (!editMode.value) {
       // === CREATE ===
-      const created = await addUser(dto);
-      // thêm nhanh cho mượt (có thể bỏ vì loadUsers() ngay sau)
+      // Validate cơ bản
+      if (!user.value.name?.trim()) {
+        errorMessage.value = "Tên đăng nhập là bắt buộc.";
+        return;
+      }
+      if (!user.value.password?.trim()) {
+        errorMessage.value = "Mật khẩu là bắt buộc.";
+        return;
+      }
+
+      const dto = toDto(user.value);
+      const created = await addUser(dto);      // gọi API
+      // thêm vào danh sách theo dữ liệu trả về
       users.value.unshift(toUi(created));
+
+      // reset form & gợi ý id mới
+      resetForm();
+      setSuggestedId();
+    } else {
+      // === UPDATE (bạn sẽ nối API update ở đây sau) ===
+      // TODO: nối updateUser(id, dto) nếu cần
+      // Tạm thời đóng popup
     }
 
-    // reload để đồng bộ tuyệt đối
-    await loadUsers();
-
-    // reset UI
-    editMode.value = false;
     showConfirm.value = false;
-    resetForm();
-    setSuggestedId();
+    editMode.value = false;
   } catch (err) {
     console.error("Save user error:", err);
     const status = err?.response?.status;
@@ -257,7 +265,7 @@ async function saveUser() {
   }
 }
 
-// Sửa
+// Sửa (chỉ bật form edit — bạn sẽ nối API update sau)
 function confirmEdit(u) {
   confirmTitle.value = "Xác nhận chỉnh sửa";
   confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin người dùng này?";
@@ -284,28 +292,16 @@ function closeView() {
   setSuggestedId();
 }
 
-// Xóa
+// Xóa (bạn sẽ nối API delete sau)
 function confirmDelete(u) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Bạn có chắc muốn xóa người dùng "${u.name}" không?`;
   confirmAction = () => doDelete(u.id);
   showConfirm.value = true;
 }
-async function doDelete(id) {
-  try {
-    errorMessage.value = "";
-    saving.value = true;
-    await deleteUserAPI(Number(id));
-    await loadUsers();        // nạp lại danh sách
-    resetForm();
-    setSuggestedId();
-    showConfirm.value = false;
-  } catch (err) {
-    console.error("Delete user error:", err);
-    errorMessage.value = err?.response?.data?.message || "Không thể xóa người dùng.";
-  } finally {
-    saving.value = false;
-  }
+function doDelete(id) {
+  // TODO: deleteUser(Number(id)); await loadUsers();
+  showConfirm.value = false;
 }
 
 // Hủy sửa
@@ -328,7 +324,6 @@ function resetForm() {
   user.value = { id: "", name: "", password: "", full_name: "", role: "staff" };
 }
 </script>
-
 
 
 <style scoped>
