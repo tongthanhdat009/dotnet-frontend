@@ -115,12 +115,13 @@
     </div>
   </div>
 </template>
+
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { getUsers } from "../api/Users.js";
+import { getUsers, addUser, updateUser, deleteUser as deleteUserAPI } from "../api/Users.js";
 
 // ===== State =====
-const users = ref([]); // không còn seed dữ liệu mẫu
+const users = ref([]); // UI model [{ id, name, password, full_name, role }]
 const user  = ref({ id: "", name: "", password: "", full_name: "", role: "staff" });
 
 const editMode = ref(false);
@@ -129,20 +130,30 @@ const searchText = ref("");
 const filterType = ref("id");
 
 const loading = ref(true);
+const saving = ref(false);
 const errorMessage = ref("");
 
 // ===== Mapping DTO <-> UI =====
-// Giả sử Role: 1=admin, 2=staff (điều chỉnh nếu bảng ROLE của bạn khác)
 const roleIdToName = (id) => (id === 1 ? "admin" : "staff");
+const roleNameToId = (name) => (name === "admin" ? 1 : 2);
 
 function toUi(dto) {
   return {
     id:        String(dto.UserId ?? ""),
     name:      dto.Username ?? "",
-    // ⚠️ API thật KHÔNG nên trả Password; ở đây map theo DTO bạn đang dùng để hiển thị
+    // ⚠️ API thật KHÔNG nên trả Password; đây chỉ map theo DTO hiện có
     password:  dto.Password ?? "",
     full_name: dto.FullName ?? "",
     role:      roleIdToName(dto.Role ?? 2),
+  };
+}
+
+function toDto(u) {
+  return {
+    Username: u.name?.trim(),
+    Password: u.password?.trim(),
+    FullName: u.full_name?.trim() || null,
+    Role:     roleNameToId(u.role),
   };
 }
 
@@ -153,6 +164,7 @@ async function loadUsers() {
     errorMessage.value = "";
     const data = await getUsers();
     users.value = Array.isArray(data) ? data.map(toUi) : [];
+    setSuggestedId(); // gợi ý ID mới
   } catch (err) {
     console.error("Get users error:", err);
     errorMessage.value = err?.response?.data?.message || "Không thể tải danh sách người dùng.";
@@ -160,28 +172,35 @@ async function loadUsers() {
     loading.value = false;
   }
 }
-
 onMounted(loadUsers);
+
+// ===== Gợi ý ID: max(UserId) + 1 =====
+function getNextIdSuggestion() {
+  const list = Array.isArray(users.value) ? users.value : [];
+  if (list.length === 0) return "1";
+  const maxNum = Math.max(
+    ...list.map(u => Number(u.id)).filter(n => Number.isFinite(n))
+  );
+  return String(maxNum + 1);
+}
+function setSuggestedId() {
+  user.value.id = getNextIdSuggestion(); // readonly, chỉ hiển thị
+}
 
 // ===== Filter =====
 const filteredUsers = computed(() => {
   const list = Array.isArray(users.value) ? users.value : [];
   const kw = searchText.value.toLowerCase().trim();
   if (!kw) return list;
-
-  return list.filter((u) => {
-    const val = String(u[filterType.value] ?? "").toLowerCase();
-    return val.includes(kw);
-  });
+  return list.filter((u) => String(u[filterType.value] ?? "").toLowerCase().includes(kw));
 });
 
-// ===== Popup xác nhận (giữ nguyên khung, bạn sẽ nối API add/update/delete sau) =====
+// ===== Popup xác nhận =====
 const showConfirm = ref(false);
 const confirmTitle = ref("");
 const confirmMessage = ref("");
 let confirmAction = null;
 
-// Thêm hoặc sửa (hiện tại chưa gọi API — bạn có thể gắn add/update vào đây sau)
 function confirmSave() {
   confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
   confirmMessage.value = editMode.value
@@ -191,15 +210,54 @@ function confirmSave() {
   showConfirm.value = true;
 }
 
-function saveUser() {
-  // TODO: gắn add/update API tại đây khi bạn sẵn sàng
-  // Hiện chỉ reset form để demo gọi GET
-  editMode.value = false;
-  resetForm();
-  showConfirm.value = false;
+async function saveUser() {
+  try {
+    errorMessage.value = "";
+    saving.value = true;
+
+    // Validate cơ bản
+    if (!user.value.name?.trim()) {
+      errorMessage.value = "Tên đăng nhập là bắt buộc.";
+      return;
+    }
+    if (!user.value.password?.trim()) {
+      errorMessage.value = "Mật khẩu là bắt buộc.";
+      return;
+    }
+
+    const dto = toDto(user.value);
+
+    if (editMode.value) {
+      // === UPDATE ===
+      await updateUser(Number(user.value.id), dto);
+    } else {
+      // === CREATE ===
+      const created = await addUser(dto);
+      // thêm nhanh cho mượt (có thể bỏ vì loadUsers() ngay sau)
+      users.value.unshift(toUi(created));
+    }
+
+    // reload để đồng bộ tuyệt đối
+    await loadUsers();
+
+    // reset UI
+    editMode.value = false;
+    showConfirm.value = false;
+    resetForm();
+    setSuggestedId();
+  } catch (err) {
+    console.error("Save user error:", err);
+    const status = err?.response?.status;
+    const msg = err?.response?.data?.message;
+    if (status === 409)      errorMessage.value = msg || "Tên đăng nhập đã được sử dụng.";
+    else if (status === 400) errorMessage.value = msg || "Dữ liệu không hợp lệ.";
+    else                     errorMessage.value = "Có lỗi xảy ra khi lưu người dùng.";
+  } finally {
+    saving.value = false;
+  }
 }
 
-// Sửa (chỉ bật form edit)
+// Sửa
 function confirmEdit(u) {
   confirmTitle.value = "Xác nhận chỉnh sửa";
   confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin người dùng này?";
@@ -223,24 +281,38 @@ function viewUser(u) {
 function closeView() {
   viewMode.value = false;
   resetForm();
+  setSuggestedId();
 }
 
-// Xóa (chưa gắn API — bạn sẽ gắn sau)
+// Xóa
 function confirmDelete(u) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Bạn có chắc muốn xóa người dùng "${u.name}" không?`;
   confirmAction = () => doDelete(u.id);
   showConfirm.value = true;
 }
-function doDelete(id) {
-  // TODO: gọi API delete tại đây, sau đó loadUsers()
-  showConfirm.value = false;
+async function doDelete(id) {
+  try {
+    errorMessage.value = "";
+    saving.value = true;
+    await deleteUserAPI(Number(id));
+    await loadUsers();        // nạp lại danh sách
+    resetForm();
+    setSuggestedId();
+    showConfirm.value = false;
+  } catch (err) {
+    console.error("Delete user error:", err);
+    errorMessage.value = err?.response?.data?.message || "Không thể xóa người dùng.";
+  } finally {
+    saving.value = false;
+  }
 }
 
 // Hủy sửa
 function cancelEdit() {
   editMode.value = false;
   resetForm();
+  setSuggestedId();
 }
 
 // Popup controls
@@ -255,8 +327,8 @@ function closeConfirm() {
 function resetForm() {
   user.value = { id: "", name: "", password: "", full_name: "", role: "staff" };
 }
-resetForm();
 </script>
+
 
 
 <style scoped>
