@@ -115,45 +115,73 @@
     </div>
   </div>
 </template>
-
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { getUsers } from "../api/Users.js";
 
-const users = ref([
-  { id: "U01", name: "admin01", password: "123", full_name: "Nguyễn Văn A", role: "admin" },
-  { id: "U02", name: "staff01", password: "abc", full_name: "Trần Thị B", role: "staff" },
-  { id: "U03", name: "longstaff", password: "456", full_name: "Phạm Văn Long", role: "staff" },
-]);
+// ===== State =====
+const users = ref([]); // không còn seed dữ liệu mẫu
+const user  = ref({ id: "", name: "", password: "", full_name: "", role: "staff" });
 
-const user = ref({ id: "", name: "", password: "", full_name: "", role: "staff" });
 const editMode = ref(false);
 const viewMode = ref(false);
 const searchText = ref("");
 const filterType = ref("id");
 
-// Popup
+const loading = ref(true);
+const errorMessage = ref("");
+
+// ===== Mapping DTO <-> UI =====
+// Giả sử Role: 1=admin, 2=staff (điều chỉnh nếu bảng ROLE của bạn khác)
+const roleIdToName = (id) => (id === 1 ? "admin" : "staff");
+
+function toUi(dto) {
+  return {
+    id:        String(dto.UserId ?? ""),
+    name:      dto.Username ?? "",
+    // ⚠️ API thật KHÔNG nên trả Password; ở đây map theo DTO bạn đang dùng để hiển thị
+    password:  dto.Password ?? "",
+    full_name: dto.FullName ?? "",
+    role:      roleIdToName(dto.Role ?? 2),
+  };
+}
+
+// ===== Fetch =====
+async function loadUsers() {
+  try {
+    loading.value = true;
+    errorMessage.value = "";
+    const data = await getUsers();
+    users.value = Array.isArray(data) ? data.map(toUi) : [];
+  } catch (err) {
+    console.error("Get users error:", err);
+    errorMessage.value = err?.response?.data?.message || "Không thể tải danh sách người dùng.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadUsers);
+
+// ===== Filter =====
+const filteredUsers = computed(() => {
+  const list = Array.isArray(users.value) ? users.value : [];
+  const kw = searchText.value.toLowerCase().trim();
+  if (!kw) return list;
+
+  return list.filter((u) => {
+    const val = String(u[filterType.value] ?? "").toLowerCase();
+    return val.includes(kw);
+  });
+});
+
+// ===== Popup xác nhận (giữ nguyên khung, bạn sẽ nối API add/update/delete sau) =====
 const showConfirm = ref(false);
 const confirmTitle = ref("");
 const confirmMessage = ref("");
 let confirmAction = null;
 
-// 🔍 Lọc danh sách user
-const filteredUsers = computed(() => {
-  const keyword = searchText.value.toLowerCase().trim();
-  if (!keyword) return users.value;
-  return users.value.filter((u) =>
-    u[filterType.value].toLowerCase().includes(keyword)
-  );
-});
-
-// 🆕 Sinh ID mới
-function generateNextId() {
-  if (users.value.length === 0) return "U01";
-  const lastNum = Math.max(...users.value.map((u) => parseInt(u.id.substring(1))));
-  return "U" + (lastNum + 1).toString().padStart(2, "0");
-}
-
-// 💾 Thêm hoặc sửa
+// Thêm hoặc sửa (hiện tại chưa gọi API — bạn có thể gắn add/update vào đây sau)
 function confirmSave() {
   confirmTitle.value = editMode.value ? "Xác nhận cập nhật" : "Xác nhận thêm mới";
   confirmMessage.value = editMode.value
@@ -164,18 +192,14 @@ function confirmSave() {
 }
 
 function saveUser() {
-  if (editMode.value) {
-    const index = users.value.findIndex((u) => u.id === user.value.id);
-    if (index !== -1) users.value[index] = { ...user.value };
-    editMode.value = false;
-  } else {
-    users.value.push({ ...user.value });
-  }
+  // TODO: gắn add/update API tại đây khi bạn sẵn sàng
+  // Hiện chỉ reset form để demo gọi GET
+  editMode.value = false;
   resetForm();
   showConfirm.value = false;
 }
 
-// ✏️ Sửa
+// Sửa (chỉ bật form edit)
 function confirmEdit(u) {
   confirmTitle.value = "Xác nhận chỉnh sửa";
   confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin người dùng này?";
@@ -189,39 +213,37 @@ function editUser(u) {
   showConfirm.value = false;
 }
 
-// 👁️ Xem (khi click dòng)
+// Xem
 function viewUser(u) {
   if (!editMode.value) {
     user.value = { ...u };
     viewMode.value = true;
   }
 }
-
 function closeView() {
   viewMode.value = false;
   resetForm();
 }
 
-// 🗑️ Xóa
+// Xóa (chưa gắn API — bạn sẽ gắn sau)
 function confirmDelete(u) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Bạn có chắc muốn xóa người dùng "${u.name}" không?`;
-  confirmAction = () => deleteUser(u.id);
+  confirmAction = () => doDelete(u.id);
   showConfirm.value = true;
 }
-function deleteUser(id) {
-  users.value = users.value.filter((u) => u.id !== id);
-  resetForm();
+function doDelete(id) {
+  // TODO: gọi API delete tại đây, sau đó loadUsers()
   showConfirm.value = false;
 }
 
-// ❌ Hủy sửa
+// Hủy sửa
 function cancelEdit() {
   editMode.value = false;
   resetForm();
 }
 
-// ✅ Popup
+// Popup controls
 function handleConfirm() {
   if (confirmAction) confirmAction();
 }
@@ -229,18 +251,13 @@ function closeConfirm() {
   showConfirm.value = false;
 }
 
-// 🔄 Reset
+// Reset form
 function resetForm() {
-  user.value = {
-    id: generateNextId(),
-    name: "",
-    password: "",
-    full_name: "",
-    role: "staff",
-  };
+  user.value = { id: "", name: "", password: "", full_name: "", role: "staff" };
 }
 resetForm();
 </script>
+
 
 <style scoped>
 .users-page {
