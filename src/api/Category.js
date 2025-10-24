@@ -6,6 +6,11 @@ export async function getCategories() {
   return res.data;
 }
 
+export async function getTotalCategories() {
+  const res = await axios.get(`${API_URL}/total`);
+  return res.data;
+}
+
 export async function addCategory(category) {
   const payload = { categoryName: category.name }; // ✅ chỉ gửi tên
   const res = await axios.post(API_URL, payload);
