@@ -11,6 +11,7 @@ import Promotions from "../views/Promotions.vue";
 import OrderItems from "../views/Order_items.vue";
 import Payments from "../views/Payments.vue";
 import RolePermission from "../views/RolePermission.vue";
+import POS from "../views/POS.vue";
 const routes = [
   { path: "/", redirect: "/dashboard" },
   { path: "/dashboard", component: Dashboard },
@@ -24,7 +25,8 @@ const routes = [
   {path:"/promotions",component:Promotions},
   {path:"/order-items",component:OrderItems},
   {path:"/payments",component:Payments},
-  {path:"/role-permission",component:RolePermission}
+  {path:"/role-permission",component:RolePermission},
+  {path:"/pos",component:POS}
 ];
 
 const router = createRouter({

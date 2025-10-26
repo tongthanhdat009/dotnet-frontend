@@ -5,6 +5,7 @@
       <h2>🏪 Store</h2>
       <nav>
         <router-link to="/dashboard">📊 Dashboard</router-link>
+        <router-link to="/pos">🛒 POS</router-link>
         <router-link to="/users">👤 Users</router-link>
         <router-link to="/customers">👥 Customers</router-link>
         <router-link to="/suppliers">🚚 Suppliers</router-link>
