@@ -8,6 +8,17 @@ export async function getProducts() {
   return res.data;
 }
 
+export async function getTotalProducts() {
+  const res = await axios.get(`${API_URL}/total`);
+  
+  return res.data;
+}
+
+export async function getTopProducts() {
+  const res = await axios.get(`${API_URL}/top-products`);
+  return res.data;
+}
+
 export async function addProduct(product) {
   const res = await axios.post(API_URL, product);
   return res.data;

@@ -36,5 +36,9 @@ export async function getCustomerOrders(id) {
 	return res.data;
 }
 
-// Optionally, export the URL for reuse
-export { CUSTOMER_API_URL };
+export async function getTopCustomers() {
+  const res = await axios.get(`${CUSTOMER_API_URL}/top-buyers`);
+  return res.data;
+}
+
+

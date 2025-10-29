@@ -63,3 +63,28 @@ export const cancelOrder = async (orderId) => {
     throw error;
   }
 };
+
+export async function getOrders() {
+  const res = await axios.get(API_URL);
+  return res.data;
+}
+
+export async function getTotalOrders() {
+  const res = await axios.get(`${API_URL}/order/total`);
+  return res.data;
+}
+
+export async function getOrdersByYear(year) {
+  const res = await axios.get(`${API_URL}/order/orders-by-year/${year}`);
+  return res.data;
+}
+
+export async function getSalesByYear(year) {
+  const res = await axios.get(`${API_URL}/order/sales-by-year/${year}`);
+  return res.data;
+}
+
+export async function getPeakTimeStats() {
+  const res = await axios.get(`${API_URL}/order/peak-time`);
+  return res.data;
+}
