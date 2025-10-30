@@ -121,7 +121,7 @@
             <th>Tên quyền</th>
             <th>Action Key</th>
             <th>Mô tả</th>
-            <th>Gán cho vai trò "{{ selectedRoleName }}"</th>
+            <th>Đã gán</th>
             <th>Hành động</th>
           </tr>
         </thead>
@@ -192,11 +192,7 @@ async function fetchRoles() {
 }
 fetchRoles();
 
-const permissions = ref([
-  { permission_id: 1, permission_name: "Quản lý người dùng", action_key: "user_manage", description: "Xem, thêm, sửa, xóa user" },
-  { permission_id: 2, permission_name: "Quản lý sản phẩm", action_key: "product_manage", description: "Quản lý sản phẩm" },
-  { permission_id: 3, permission_name: "Quản lý đơn hàng", action_key: "order_manage", description: "Quản lý đơn hàng" },
-]);
+const permissions = ref([]);
 
 const rolePermissions = ref([
   { role_id: 1, permission_id: 1 },
@@ -293,40 +289,87 @@ function resetRoleForm() {
 }
 
 // ====== PERMISSION ======
+import { getAllPermissions, createPermission, updatePermission, deletePermission } from "../api/Permission.js";
+
 const permission = ref({ permission_id: "", permission_name: "", action_key: "", description: "" });
 const editPermMode = ref(false);
-const permSearch = ref("");
+const permSearch = ref("");  
 const permFilterType = ref("permission_name");
 const filteredPermissions = computed(() => {
   const kw = permSearch.value.toLowerCase().trim();
   return permissions.value.filter((p) => p[permFilterType.value].toString().toLowerCase().includes(kw));
 });
 
+async function fetchPermissions() {
+  try {
+    const data = await getAllPermissions();
+    permissions.value = data.map((p) => ({
+      permission_id: p.PermissionId,
+      permission_name: p.PermissionName,
+      action_key: p.ActionKey,
+      description: p.Description,
+    }));
+    console.log("Fetched permissions:", toRaw(permissions.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch permissions:", err);
+  }
+}
+fetchPermissions();
+
 function viewPermissionDetails(p) {
   permission.value = { ...p }; // chỉ xem chi tiết
 }
 
-function generateNextPermId() {
-  if (permissions.value.length === 0) return 1;
-  return Math.max(...permissions.value.map((p) => p.permission_id)) + 1;
-}
+// function generateNextPermId() {
+//   if (permissions.value.length === 0) return 1;
+//   return Math.max(...permissions.value.map((p) => p.permission_id)) + 1;
+// }
 function confirmSavePermission() {
   confirmTitle.value = editPermMode.value ? "Cập nhật quyền" : "Thêm quyền mới";
   confirmMessage.value = "Bạn có chắc muốn lưu thông tin này?";
   confirmAction = savePermission;
   showConfirm.value = true;
 }
-function savePermission() {
-  if (editPermMode.value) {
-    const idx = permissions.value.findIndex((p) => p.permission_id === permission.value.permission_id);
-    if (idx !== -1) permissions.value[idx] = { ...permission.value };
-  } else {
-    permission.value.permission_id = generateNextPermId();
-    permissions.value.push({ ...permission.value });
+// function savePermission() {
+//   if (editPermMode.value) {
+//     const idx = permissions.value.findIndex((p) => p.permission_id === permission.value.permission_id);
+//     if (idx !== -1) permissions.value[idx] = { ...permission.value };
+//   } else {
+//     permission.value.permission_id = generateNextPermId();
+//     permissions.value.push({ ...permission.value });
+//   }
+//   resetPermissionForm();
+//   showConfirm.value = false;
+// }
+async function savePermission() {
+  try {
+    const payload = {
+      PermissionId: permission.value.permission_id,
+      PermissionName: permission.value.permission_name,
+      ActionKey: permission.value.action_key,
+      Description: permission.value.description,
+    };
+
+    if (editPermMode.value) {
+      const res = await updatePermission(permission.value.permission_id, payload);
+      if (res.status === 200) {
+        const idx = permissions.value.findIndex(p => p.permission_id === permission.value.permission_id);
+        if (idx !== -1) permissions.value[idx] = { ...permission.value };
+      }
+    } else {
+      const res = await createPermission(payload);
+      if (res.status === 201 || res.status === 200) {
+        await resetPermissionForm(); // nạp lại danh sách
+      }
+    }
+  } catch (err) {
+    console.error("Lỗi khi lưu permission:", err.response?.data || err);
+  } finally {
+    resetPermissionForm();
+    showConfirm.value = false;
   }
-  resetPermissionForm();
-  showConfirm.value = false;
-}
+} 
+
 function editPermission(p) {
   permission.value = { ...p };
   editPermMode.value = true;
@@ -338,17 +381,30 @@ function cancelEditPermission() {
 function confirmDeletePermission(p) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Xóa quyền "${p.permission_name}"?`;
-  confirmAction = () => deletePermission(p.permission_id);
+  confirmAction = () => deletePermission1(p.permission_id);
   showConfirm.value = true;
 }
-function deletePermission(id) {
-  permissions.value = permissions.value.filter((p) => p.permission_id !== id);
-  rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
-  resetPermissionForm();
-  showConfirm.value = false;
+// function deletePermission(id) {
+//   permissions.value = permissions.value.filter((p) => p.permission_id !== id);
+//   rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
+//   resetPermissionForm();
+//   showConfirm.value = false;
+// }
+
+function deletePermission1(id) {
+  try {
+    deletePermission(id);
+    permissions.value = permissions.value.filter((p) => p.permission_id !== id);
+    rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
+    resetPermissionForm();
+    showConfirm.value = false;
+  } catch (err) {
+    console.error("Lỗi khi xóa permission:", err.response?.data || err);
+  }
 }
+
 function resetPermissionForm() {
-  permission.value = { permission_id: "", permission_name: "", action_key: "", description: "" };
+  fetchPermissions();
 }
 
 // ====== GÁN QUYỀN ======
