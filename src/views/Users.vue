@@ -2,10 +2,6 @@
   <div class="users-page">
     <h2>👤 Quản lý người dùng</h2>
 
-    <!-- Trạng thái -->
-    <div v-if="loading" class="status info">Đang tải danh sách người dùng...</div>
-    <div v-if="errorMessage" class="status error">{{ errorMessage }}</div>
-
     <!-- 🔍 Thanh tìm kiếm -->
     <div class="search-bar">
       <label for="filterType">Tìm theo:</label>
@@ -65,13 +61,10 @@
       </div>
 
       <!-- Nút hành động -->
-      <div class="form-actions">
-        <button type="submit" v-if="!viewMode" :disabled="saving">
-          {{ editMode ? (saving ? "Đang cập nhật..." : "Cập nhật") : (saving ? "Đang thêm..." : "Thêm mới") }}
-        </button>
-        <button type="button" v-if="editMode" @click="cancelEdit" :disabled="saving">Hủy</button>
+        <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+        <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
         <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
-      </div>
+      
     </form>
 
     <!-- 📋 Bảng hiển thị -->
@@ -122,10 +115,9 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { getUsers, addUser, updateUser, deleteUser } from "../api/Users.js";
+import { getUsers, addUser } from "../api/Users.js";
 
 // ===== State =====
 const users = ref([]); // danh sách hiển thị (UI model)
@@ -254,42 +246,13 @@ async function saveUser() {
       resetForm();
       setSuggestedId();
     } else {
-      // === UPDATE ===
-      // Validate cơ bản
-      if (!user.value.name?.trim()) {
-        errorMessage.value = "Tên đăng nhập là bắt buộc.";
-        return;
-      }
-      if (!user.value.password?.trim()) {
-        errorMessage.value = "Mật khẩu là bắt buộc.";
-        return;
-      }
-
-      const idNum = Number(user.value.id);
-      if (!Number.isFinite(idNum)) {
-        errorMessage.value = "ID không hợp lệ.";
-        return;
-      }
-
-      // [FIX: include UserId để khớp route]
-      const dto = { ...toDto(user.value), UserId: idNum };
-
-      const updated = await updateUser(idNum, dto);
-
-      // Cập nhật lại item trong mảng users (không cần reload toàn bộ)
-      const idx = users.value.findIndex(u => String(u.id) === String(user.value.id));
-      if (idx !== -1) {
-        users.value[idx] = toUi(updated);
-      }
-
-      // Đóng chế độ edit
-      editMode.value = false;
-      viewMode.value = false;
-      resetForm();
-      setSuggestedId();
+      // === UPDATE (bạn sẽ nối API update ở đây sau) ===
+      // TODO: nối updateUser(id, dto) nếu cần
+      // Tạm thời đóng popup
     }
 
     showConfirm.value = false;
+    editMode.value = false;
   } catch (err) {
     console.error("Save user error:", err);
     const status = err?.response?.status;
@@ -302,7 +265,7 @@ async function saveUser() {
   }
 }
 
-// Sửa (chỉ bật form edit)
+// Sửa (chỉ bật form edit — bạn sẽ nối API update sau)
 function confirmEdit(u) {
   confirmTitle.value = "Xác nhận chỉnh sửa";
   confirmMessage.value = "Bạn có chắc muốn chỉnh sửa thông tin người dùng này?";
@@ -329,41 +292,16 @@ function closeView() {
   setSuggestedId();
 }
 
-// Xóa
+// Xóa (bạn sẽ nối API delete sau)
 function confirmDelete(u) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Bạn có chắc muốn xóa người dùng "${u.name}" không?`;
   confirmAction = () => doDelete(u.id);
   showConfirm.value = true;
 }
-async function doDelete(id) {
-  try {
-    errorMessage.value = "";
-    const idNum = Number(id);
-    if (!Number.isFinite(idNum)) {
-      errorMessage.value = "ID không hợp lệ.";
-      return;
-    }
-
-    await deleteUser(idNum);
-
-    // Xóa khỏi danh sách hiện tại (không cần fetch lại)
-    users.value = users.value.filter(u => String(u.id) !== String(id));
-
-    // Nếu đang xem/sửa đúng user vừa xóa -> reset form
-    if (String(user.value.id) === String(id)) {
-      editMode.value = false;
-      viewMode.value = false;
-      resetForm();
-      setSuggestedId();
-    }
-  } catch (err) {
-    console.error("Delete user error:", err);
-    const msg = err?.response?.data?.message;
-    errorMessage.value = msg || "Có lỗi xảy ra khi xóa người dùng.";
-  } finally {
-    showConfirm.value = false;
-  }
+function doDelete(id) {
+  // TODO: deleteUser(Number(id)); await loadUsers();
+  showConfirm.value = false;
 }
 
 // Hủy sửa
@@ -387,6 +325,7 @@ function resetForm() {
 }
 </script>
 
+
 <style scoped>
 .users-page {
   background: white;
@@ -395,47 +334,11 @@ function resetForm() {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.status {
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-.status.info {
-  background: #f0f9ff;
-  color: #055160;
-  border: 1px solid #b6effb;
-}
-.status.error {
-  background: #fff5f5;
-  color: #b42318;
-  border: 1px solid #f8d7da;
-}
-
-.search-bar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
 .user-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-actions {
-  grid-column: span 2;
-  display: flex;
-  gap: 10px;
 }
 
 .user-table {
@@ -464,55 +367,9 @@ function resetForm() {
   background-color: #e7f1ff;
 }
 
-/* Popup xác nhận */
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
-}
-
-.confirm-box {
-  width: min(480px, 92vw);
-  background: #fff;
-  border-radius: 12px;
-  padding: 18px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
-}
-
-.confirm-box h3 {
-  margin: 0 0 8px 0;
-}
-
-.confirm-box p {
-  margin: 0 0 12px 0;
-  color: #444;
-}
-
-.actions {
+.form-actions {
+  grid-column: span 2;
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
 }
-
-.btn-yes {
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.btn-no {
-  background: #e5e7eb;
-  color: #111827;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.btn-yes:hover { opacity: 0.9; }
-.btn-no:hover { opacity: 0.9; }
 </style>
