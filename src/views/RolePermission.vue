@@ -171,12 +171,26 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import { toRaw } from 'vue';
 
 // ====== DỮ LIỆU GIẢ ======
-const roles = ref([
-  { role_id: 1, role_name: "Admin", description: "Toàn quyền hệ thống" },
-  { role_id: 2, role_name: "Nhân viên", description: "Quản lý sản phẩm, đơn hàng" },
-]);
+import { getAllRoles, createRole, updateRole ,deleteRole } from "../api/Role.js";
+
+const roles = ref([]);
+async function fetchRoles() {
+  try {
+    const data = await getAllRoles();
+    roles.value = data.map((s) => ({
+      role_id: s.RoleId,
+      role_name: s.RoleName,
+      description: s.Description,
+    }));
+    console.log("Fetched roles:", toRaw(roles.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch roles:", err);
+  }
+}
+fetchRoles();
 
 const permissions = ref([
   { permission_id: 1, permission_name: "Quản lý người dùng", action_key: "user_manage", description: "Xem, thêm, sửa, xóa user" },
@@ -201,6 +215,34 @@ const selectedRoleName = computed(() => {
   const r = roles.value.find((r) => r.role_id === selectedRoleId.value);
   return r ? r.role_name : "";
 });
+
+async function saveRole() {
+  try {
+    const payload = {
+      RoleName: role.value.role_name,
+      Description: role.value.description,
+    };
+
+    if (editRoleMode.value) {
+      const res = await updateRole(role.value.role_id, payload);
+      if (res.status === 200) {
+        const idx = roles.value.findIndex(r => r.role_id === role.value.role_id);
+        if (idx !== -1) roles.value[idx] = { ...role.value };
+      }
+    } else {
+      const res = await createRole(payload);
+      if (res.status === 201 || res.status === 200) {
+        await fetchRoles(); // nạp lại danh sách
+      }
+    }
+  } catch (err) {
+    console.error("Lỗi khi lưu role:", err.response?.data || err);
+  } finally {
+    resetRoleForm();
+    showConfirm.value = false;
+  }
+}
+
 const filteredRoles = computed(() => {
   const kw = roleSearch.value.toLowerCase().trim();
   return roles.value.filter((r) => r[roleFilterType.value].toString().toLowerCase().includes(kw));
@@ -211,10 +253,7 @@ function viewRoleDetails(r) {
   role.value = { ...r }; // chỉ xem chi tiết, không bật edit mode
 }
 
-function generateNextRoleId() {
-  if (roles.value.length === 0) return 1;
-  return Math.max(...roles.value.map((r) => r.role_id)) + 1;
-}
+// ZZ
 
 function confirmSaveRole() {
   confirmTitle.value = editRoleMode.value ? "Cập nhật vai trò" : "Thêm vai trò mới";
@@ -222,17 +261,7 @@ function confirmSaveRole() {
   confirmAction = saveRole;
   showConfirm.value = true;
 }
-function saveRole() {
-  if (editRoleMode.value) {
-    const idx = roles.value.findIndex((r) => r.role_id === role.value.role_id);
-    if (idx !== -1) roles.value[idx] = { ...role.value };
-  } else {
-    role.value.role_id = generateNextRoleId();
-    roles.value.push({ ...role.value });
-  }
-  resetRoleForm();
-  showConfirm.value = false;
-}
+
 function editRole(r) {
   role.value = { ...r };
   editRoleMode.value = true;
@@ -244,17 +273,23 @@ function cancelEditRole() {
 function confirmDeleteRole(r) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Xóa vai trò "${r.role_name}"?`;
-  confirmAction = () => deleteRole(r.role_id);
+  confirmAction = () => deleteRole1(r.role_id);
   showConfirm.value = true;
 }
-function deleteRole(id) {
-  roles.value = roles.value.filter((r) => r.role_id !== id);
-  rolePermissions.value = rolePermissions.value.filter((rp) => rp.role_id !== id);
-  resetRoleForm();
-  showConfirm.value = false;
+async function deleteRole1(id) {
+  try {
+    await deleteRole(id);
+    roles.value = roles.value.filter((r) => r.role_id !== id);
+    rolePermissions.value = rolePermissions.value.filter((rp) => rp.role_id !== id);
+    resetRoleForm();
+    showConfirm.value = false;
+  } catch (err) {
+    console.error("Lỗi khi xóa role:", err.response?.data || err);
+  }
 }
+
 function resetRoleForm() {
-  role.value = { role_id: "", role_name: "", description: "" };
+  fetchRoles();
 }
 
 // ====== PERMISSION ======
