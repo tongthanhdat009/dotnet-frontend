@@ -194,12 +194,7 @@ fetchRoles();
 
 const permissions = ref([]);
 
-const rolePermissions = ref([
-  { role_id: 1, permission_id: 1 },
-  { role_id: 1, permission_id: 2 },
-  { role_id: 1, permission_id: 3 },
-  { role_id: 2, permission_id: 2 },
-]);
+const rolePermissions = ref([]);
 
 // ====== ROLE ======
 const role = ref({ role_id: "", role_name: "", description: "" });
@@ -408,18 +403,47 @@ function resetPermissionForm() {
 }
 
 // ====== GÁN QUYỀN ======
+import { getAllRolePermissions, assignPermissionToRole, removePermissionFromRole } from "../api/RolePermission.js";
+
+
+async function fetchRolePermissions() {
+  try {
+    const data = await getAllRolePermissions();
+    console.log("Raw role-permissions data:", data);
+    rolePermissions.value = data.map((rp) => ({
+      role_id: rp.RoleId,
+      permission_id: rp.PermissionId,
+    }));
+    console.log("Fetched role-permissions:", toRaw(rolePermissions.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch role-permissions:", err);
+  }
+}
+fetchRolePermissions();
+  
 function isPermissionAssigned(permId) {
   return rolePermissions.value.some((rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId);
 }
-function togglePermission(permId) {
+
+async function togglePermission(permId) {
   if (!selectedRoleId.value) return;
-  const index = rolePermissions.value.findIndex(
-    (rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId
-  );
-  if (index === -1) {
-    rolePermissions.value.push({ role_id: selectedRoleId.value, permission_id: permId });
-  } else {
-    rolePermissions.value.splice(index, 1);
+  
+  try {
+    const index = rolePermissions.value.findIndex(
+      (rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId
+    );
+
+    if (index === -1) {
+      // Thêm quyền mới
+      await assignPermissionToRole(selectedRoleId.value, permId);
+      rolePermissions.value.push({ role_id: selectedRoleId.value, permission_id: permId });
+    } else {
+      // Xóa quyền
+      await removePermissionFromRole(selectedRoleId.value, permId);
+      rolePermissions.value.splice(index, 1);
+    }
+  } catch (err) {
+    console.error("Lỗi khi cập nhật quyền:", err.response?.data || err);
   }
 }
 
