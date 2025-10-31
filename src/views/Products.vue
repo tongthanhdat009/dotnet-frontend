@@ -112,8 +112,8 @@
           :class="{ active: viewMode && product.ProductId === p?.ProductId }"
         >
           <td>{{ displayId(p?.ProductId) }}</td>
-          <td>{{ p?.CategoryName || '-' }}</td>
-          <td>{{ p?.SupplierName || '-' }}</td>
+          <td>{{ p?.Category.CategoryName || '-' }}</td>
+          <td>{{ p?.Supplier.Name || '-' }}</td>
           <td>{{ p?.ProductName || '-' }}</td>
           <td>{{ p?.Barcode || '-' }}</td>
           <td>{{ formatPrice(p?.Price) }}</td>
@@ -265,6 +265,7 @@ async function fetchSuppliers() {
     errorMessage.value = "Không thể tải danh sách nhà cung cấp";
   }
 }
+
 
 async function fetchProducts() {
   try {
@@ -477,9 +478,9 @@ function vietnameseIncludes(text, keyword) {
 // ----- Mount
 onMounted(async () => {
   await Promise.all([
+    fetchProducts(),
     fetchCategories(),
-    fetchSuppliers(),
-    fetchProducts()
+    fetchSuppliers()
   ]);
 });
 </script>
