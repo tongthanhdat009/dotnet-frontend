@@ -121,7 +121,7 @@
             <th>Tên quyền</th>
             <th>Action Key</th>
             <th>Mô tả</th>
-            <th>Gán cho vai trò "{{ selectedRoleName }}"</th>
+            <th>Đã gán</th>
             <th>Hành động</th>
           </tr>
         </thead>
@@ -171,25 +171,30 @@
 
 <script setup>
 import { ref, computed } from "vue";
+import { toRaw } from 'vue';
 
 // ====== DỮ LIỆU GIẢ ======
-const roles = ref([
-  { role_id: 1, role_name: "Admin", description: "Toàn quyền hệ thống" },
-  { role_id: 2, role_name: "Nhân viên", description: "Quản lý sản phẩm, đơn hàng" },
-]);
+import { getAllRoles, createRole, updateRole ,deleteRole } from "../api/Role.js";
 
-const permissions = ref([
-  { permission_id: 1, permission_name: "Quản lý người dùng", action_key: "user_manage", description: "Xem, thêm, sửa, xóa user" },
-  { permission_id: 2, permission_name: "Quản lý sản phẩm", action_key: "product_manage", description: "Quản lý sản phẩm" },
-  { permission_id: 3, permission_name: "Quản lý đơn hàng", action_key: "order_manage", description: "Quản lý đơn hàng" },
-]);
+const roles = ref([]);
+async function fetchRoles() {
+  try {
+    const data = await getAllRoles();
+    roles.value = data.map((s) => ({
+      role_id: s.RoleId,
+      role_name: s.RoleName,
+      description: s.Description,
+    }));
+    console.log("Fetched roles:", toRaw(roles.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch roles:", err);
+  }
+}
+fetchRoles();
 
-const rolePermissions = ref([
-  { role_id: 1, permission_id: 1 },
-  { role_id: 1, permission_id: 2 },
-  { role_id: 1, permission_id: 3 },
-  { role_id: 2, permission_id: 2 },
-]);
+const permissions = ref([]);
+
+const rolePermissions = ref([]);
 
 // ====== ROLE ======
 const role = ref({ role_id: "", role_name: "", description: "" });
@@ -201,6 +206,34 @@ const selectedRoleName = computed(() => {
   const r = roles.value.find((r) => r.role_id === selectedRoleId.value);
   return r ? r.role_name : "";
 });
+
+async function saveRole() {
+  try {
+    const payload = {
+      RoleName: role.value.role_name,
+      Description: role.value.description,
+    };
+
+    if (editRoleMode.value) {
+      const res = await updateRole(role.value.role_id, payload);
+      if (res.status === 200) {
+        const idx = roles.value.findIndex(r => r.role_id === role.value.role_id);
+        if (idx !== -1) roles.value[idx] = { ...role.value };
+      }
+    } else {
+      const res = await createRole(payload);
+      if (res.status === 201 || res.status === 200) {
+        await fetchRoles(); // nạp lại danh sách
+      }
+    }
+  } catch (err) {
+    console.error("Lỗi khi lưu role:", err.response?.data || err);
+  } finally {
+    resetRoleForm();
+    showConfirm.value = false;
+  }
+}
+
 const filteredRoles = computed(() => {
   const kw = roleSearch.value.toLowerCase().trim();
   return roles.value.filter((r) => r[roleFilterType.value].toString().toLowerCase().includes(kw));
@@ -211,10 +244,7 @@ function viewRoleDetails(r) {
   role.value = { ...r }; // chỉ xem chi tiết, không bật edit mode
 }
 
-function generateNextRoleId() {
-  if (roles.value.length === 0) return 1;
-  return Math.max(...roles.value.map((r) => r.role_id)) + 1;
-}
+// ZZ
 
 function confirmSaveRole() {
   confirmTitle.value = editRoleMode.value ? "Cập nhật vai trò" : "Thêm vai trò mới";
@@ -222,17 +252,7 @@ function confirmSaveRole() {
   confirmAction = saveRole;
   showConfirm.value = true;
 }
-function saveRole() {
-  if (editRoleMode.value) {
-    const idx = roles.value.findIndex((r) => r.role_id === role.value.role_id);
-    if (idx !== -1) roles.value[idx] = { ...role.value };
-  } else {
-    role.value.role_id = generateNextRoleId();
-    roles.value.push({ ...role.value });
-  }
-  resetRoleForm();
-  showConfirm.value = false;
-}
+
 function editRole(r) {
   role.value = { ...r };
   editRoleMode.value = true;
@@ -244,54 +264,107 @@ function cancelEditRole() {
 function confirmDeleteRole(r) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Xóa vai trò "${r.role_name}"?`;
-  confirmAction = () => deleteRole(r.role_id);
+  confirmAction = () => deleteRole1(r.role_id);
   showConfirm.value = true;
 }
-function deleteRole(id) {
-  roles.value = roles.value.filter((r) => r.role_id !== id);
-  rolePermissions.value = rolePermissions.value.filter((rp) => rp.role_id !== id);
-  resetRoleForm();
-  showConfirm.value = false;
+async function deleteRole1(id) {
+  try {
+    await deleteRole(id);
+    roles.value = roles.value.filter((r) => r.role_id !== id);
+    rolePermissions.value = rolePermissions.value.filter((rp) => rp.role_id !== id);
+    resetRoleForm();
+    showConfirm.value = false;
+  } catch (err) {
+    console.error("Lỗi khi xóa role:", err.response?.data || err);
+  }
 }
+
 function resetRoleForm() {
-  role.value = { role_id: "", role_name: "", description: "" };
+  fetchRoles();
 }
 
 // ====== PERMISSION ======
+import { getAllPermissions, createPermission, updatePermission, deletePermission } from "../api/Permission.js";
+
 const permission = ref({ permission_id: "", permission_name: "", action_key: "", description: "" });
 const editPermMode = ref(false);
-const permSearch = ref("");
+const permSearch = ref("");  
 const permFilterType = ref("permission_name");
 const filteredPermissions = computed(() => {
   const kw = permSearch.value.toLowerCase().trim();
   return permissions.value.filter((p) => p[permFilterType.value].toString().toLowerCase().includes(kw));
 });
 
+async function fetchPermissions() {
+  try {
+    const data = await getAllPermissions();
+    permissions.value = data.map((p) => ({
+      permission_id: p.PermissionId,
+      permission_name: p.PermissionName,
+      action_key: p.ActionKey,
+      description: p.Description,
+    }));
+    console.log("Fetched permissions:", toRaw(permissions.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch permissions:", err);
+  }
+}
+fetchPermissions();
+
 function viewPermissionDetails(p) {
   permission.value = { ...p }; // chỉ xem chi tiết
 }
 
-function generateNextPermId() {
-  if (permissions.value.length === 0) return 1;
-  return Math.max(...permissions.value.map((p) => p.permission_id)) + 1;
-}
+// function generateNextPermId() {
+//   if (permissions.value.length === 0) return 1;
+//   return Math.max(...permissions.value.map((p) => p.permission_id)) + 1;
+// }
 function confirmSavePermission() {
   confirmTitle.value = editPermMode.value ? "Cập nhật quyền" : "Thêm quyền mới";
   confirmMessage.value = "Bạn có chắc muốn lưu thông tin này?";
   confirmAction = savePermission;
   showConfirm.value = true;
 }
-function savePermission() {
-  if (editPermMode.value) {
-    const idx = permissions.value.findIndex((p) => p.permission_id === permission.value.permission_id);
-    if (idx !== -1) permissions.value[idx] = { ...permission.value };
-  } else {
-    permission.value.permission_id = generateNextPermId();
-    permissions.value.push({ ...permission.value });
+// function savePermission() {
+//   if (editPermMode.value) {
+//     const idx = permissions.value.findIndex((p) => p.permission_id === permission.value.permission_id);
+//     if (idx !== -1) permissions.value[idx] = { ...permission.value };
+//   } else {
+//     permission.value.permission_id = generateNextPermId();
+//     permissions.value.push({ ...permission.value });
+//   }
+//   resetPermissionForm();
+//   showConfirm.value = false;
+// }
+async function savePermission() {
+  try {
+    const payload = {
+      PermissionId: permission.value.permission_id,
+      PermissionName: permission.value.permission_name,
+      ActionKey: permission.value.action_key,
+      Description: permission.value.description,
+    };
+
+    if (editPermMode.value) {
+      const res = await updatePermission(permission.value.permission_id, payload);
+      if (res.status === 200) {
+        const idx = permissions.value.findIndex(p => p.permission_id === permission.value.permission_id);
+        if (idx !== -1) permissions.value[idx] = { ...permission.value };
+      }
+    } else {
+      const res = await createPermission(payload);
+      if (res.status === 201 || res.status === 200) {
+        await resetPermissionForm(); // nạp lại danh sách
+      }
+    }
+  } catch (err) {
+    console.error("Lỗi khi lưu permission:", err.response?.data || err);
+  } finally {
+    resetPermissionForm();
+    showConfirm.value = false;
   }
-  resetPermissionForm();
-  showConfirm.value = false;
-}
+} 
+
 function editPermission(p) {
   permission.value = { ...p };
   editPermMode.value = true;
@@ -303,32 +376,74 @@ function cancelEditPermission() {
 function confirmDeletePermission(p) {
   confirmTitle.value = "Xác nhận xóa";
   confirmMessage.value = `Xóa quyền "${p.permission_name}"?`;
-  confirmAction = () => deletePermission(p.permission_id);
+  confirmAction = () => deletePermission1(p.permission_id);
   showConfirm.value = true;
 }
-function deletePermission(id) {
-  permissions.value = permissions.value.filter((p) => p.permission_id !== id);
-  rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
-  resetPermissionForm();
-  showConfirm.value = false;
+// function deletePermission(id) {
+//   permissions.value = permissions.value.filter((p) => p.permission_id !== id);
+//   rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
+//   resetPermissionForm();
+//   showConfirm.value = false;
+// }
+
+function deletePermission1(id) {
+  try {
+    deletePermission(id);
+    permissions.value = permissions.value.filter((p) => p.permission_id !== id);
+    rolePermissions.value = rolePermissions.value.filter((rp) => rp.permission_id !== id);
+    resetPermissionForm();
+    showConfirm.value = false;
+  } catch (err) {
+    console.error("Lỗi khi xóa permission:", err.response?.data || err);
+  }
 }
+
 function resetPermissionForm() {
-  permission.value = { permission_id: "", permission_name: "", action_key: "", description: "" };
+  fetchPermissions();
 }
 
 // ====== GÁN QUYỀN ======
+import { getAllRolePermissions, assignPermissionToRole, removePermissionFromRole } from "../api/RolePermission.js";
+
+
+async function fetchRolePermissions() {
+  try {
+    const data = await getAllRolePermissions();
+    console.log("Raw role-permissions data:", data);
+    rolePermissions.value = data.map((rp) => ({
+      role_id: rp.RoleId,
+      permission_id: rp.PermissionId,
+    }));
+    console.log("Fetched role-permissions:", toRaw(rolePermissions.value));
+  } catch (err) {
+    console.error("Lỗi khi fetch role-permissions:", err);
+  }
+}
+fetchRolePermissions();
+  
 function isPermissionAssigned(permId) {
   return rolePermissions.value.some((rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId);
 }
-function togglePermission(permId) {
+
+async function togglePermission(permId) {
   if (!selectedRoleId.value) return;
-  const index = rolePermissions.value.findIndex(
-    (rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId
-  );
-  if (index === -1) {
-    rolePermissions.value.push({ role_id: selectedRoleId.value, permission_id: permId });
-  } else {
-    rolePermissions.value.splice(index, 1);
+  
+  try {
+    const index = rolePermissions.value.findIndex(
+      (rp) => rp.role_id === selectedRoleId.value && rp.permission_id === permId
+    );
+
+    if (index === -1) {
+      // Thêm quyền mới
+      await assignPermissionToRole(selectedRoleId.value, permId);
+      rolePermissions.value.push({ role_id: selectedRoleId.value, permission_id: permId });
+    } else {
+      // Xóa quyền
+      await removePermissionFromRole(selectedRoleId.value, permId);
+      rolePermissions.value.splice(index, 1);
+    }
+  } catch (err) {
+    console.error("Lỗi khi cập nhật quyền:", err.response?.data || err);
   }
 }
 
