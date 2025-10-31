@@ -246,9 +246,11 @@ async function saveUser() {
       }
 
       const dto = toDto(user.value);
-      const created = await addUser(dto);      // gọi API
-      // thêm vào danh sách theo dữ liệu trả về
-      users.value.unshift(toUi(created));
+      await addUser(dto);      // gọi API
+
+      // ✅ RELOAD lại danh sách từ backend thay vì update local
+      console.log("✅ Thêm user thành công! Đang tải lại danh sách...");
+      await loadUsers();
 
       // reset form & gợi ý id mới
       resetForm();
@@ -274,13 +276,11 @@ async function saveUser() {
       // [FIX: include UserId để khớp route]
       const dto = { ...toDto(user.value), UserId: idNum };
 
-      const updated = await updateUser(idNum, dto);
+      await updateUser(idNum, dto);
 
-      // Cập nhật lại item trong mảng users (không cần reload toàn bộ)
-      const idx = users.value.findIndex(u => String(u.id) === String(user.value.id));
-      if (idx !== -1) {
-        users.value[idx] = toUi(updated);
-      }
+      // ✅ RELOAD lại danh sách từ backend thay vì update local
+      console.log("✅ Cập nhật user thành công! Đang tải lại danh sách...");
+      await loadUsers();
 
       // Đóng chế độ edit
       editMode.value = false;
@@ -294,7 +294,7 @@ async function saveUser() {
     console.error("Save user error:", err);
     const status = err?.response?.status;
     const msg = err?.response?.data?.message;
-    if (status === 409)      errorMessage.value = msg || "Tên đăng nhập đã được sử dụng.";
+    if (status === 409)        errorMessage.value = msg || "Tên đăng nhập đã được sử dụng.";
     else if (status === 400) errorMessage.value = msg || "Dữ liệu không hợp lệ.";
     else                     errorMessage.value = "Có lỗi xảy ra khi lưu người dùng.";
   } finally {
@@ -347,8 +347,9 @@ async function doDelete(id) {
 
     await deleteUser(idNum);
 
-    // Xóa khỏi danh sách hiện tại (không cần fetch lại)
-    users.value = users.value.filter(u => String(u.id) !== String(id));
+    // ✅ RELOAD lại danh sách từ backend thay vì xóa local
+    console.log("✅ Xóa user thành công! Đang tải lại danh sách...");
+    await loadUsers();
 
     // Nếu đang xem/sửa đúng user vừa xóa -> reset form
     if (String(user.value.id) === String(id)) {
@@ -417,6 +418,24 @@ function resetForm() {
   gap: 10px;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.no-permission-box {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.no-permission-box p {
+  margin: 4px 0;
+  color: #856404;
+}
+
+.no-permission-box strong {
+  color: #d32f2f;
 }
 
 .user-form {
