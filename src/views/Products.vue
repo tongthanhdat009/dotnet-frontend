@@ -246,6 +246,27 @@ const confirmMessage = ref("");
 let confirmAction = null;
 
 // ----- Fetch data
+async function fetchCategories() {
+  try {
+    const data = await getCategories();
+    categories.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải categories:", err);
+    errorMessage.value = "Không thể tải danh sách danh mục";
+  }
+}
+
+async function fetchSuppliers() {
+  try {
+    const data = await getSuppliers();
+    suppliers.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải suppliers:", err);
+    errorMessage.value = "Không thể tải danh sách nhà cung cấp";
+  }
+}
+
+
 async function fetchProducts() {
   try {
     loading.value = true;
@@ -457,7 +478,9 @@ function vietnameseIncludes(text, keyword) {
 // ----- Mount
 onMounted(async () => {
   await Promise.all([
-    fetchProducts()
+    fetchProducts(),
+    fetchCategories(),
+    fetchSuppliers()
   ]);
 });
 </script>
