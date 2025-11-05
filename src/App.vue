@@ -1,13 +1,14 @@
 <template>
-  <div class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar">
+  <div class="app" :class="{ 'no-sidebar': isLoginPage }">
+    <!-- Sidebar - chỉ hiển thị khi KHÔNG phải trang login -->
+    <aside v-if="!isLoginPage" class="sidebar">
       <h2>🏪 Store</h2>
       <nav>
+        <router-link to="/profile">👤 Profile</router-link>
         <router-link to="/dashboard">📊 Dashboard</router-link>
         <router-link to="/pos">🛒 POS</router-link>
-        <router-link to="/users">👤 Users</router-link>
-        <router-link to="/customers">👥 Customers</router-link>
+        <router-link to="/users">� Users</router-link>
+        <router-link to="/customers">👨‍👩‍👧‍� Customers</router-link>
         <router-link to="/suppliers">🚚 Suppliers</router-link>
         <router-link to="/categories">🏷️ Categories</router-link>
         <router-link to="/products">📦 Products</router-link>
@@ -16,22 +17,37 @@
         <router-link to="/orders">📝 Orders</router-link>
         <router-link to="/order-items">📋 Order Items</router-link>
         <router-link to="/payments">💳 Payments</router-link>
-        <router-link to="/role-permission">👤 RolePermission</router-link>
+        <router-link to="/role-permission">� RolePermission</router-link>
       </nav>
     </aside>
 
     <!-- Nội dung chính -->
-    <main class="content">
+    <main class="content" :class="{ 'full-width': isLoginPage }">
       <router-view />
     </main>
   </div>
 </template>
+
+<script setup>
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
+
+const route = useRoute();
+
+// Kiểm tra xem có phải trang login không
+const isLoginPage = computed(() => route.path === '/login');
+</script>
 
 <style scoped>
 .app {
   display: flex;
   height: 100vh;
   font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* Khi không có sidebar (trang login) */
+.app.no-sidebar {
+  display: block;
 }
 
 /* Sidebar */
@@ -77,5 +93,12 @@
   padding: 20px;
   background: #f4f6f8;
   overflow-y: auto;
+}
+
+/* Nội dung full width khi không có sidebar */
+.content.full-width {
+  width: 100%;
+  padding: 0;
+  background: transparent;
 }
 </style>

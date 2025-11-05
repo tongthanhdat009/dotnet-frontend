@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
+import Login from "../views/Login.vue";
+import Profile from "../views/Profile.vue";
 import Dashboard from "../views/Dashboard.vue";
 import Customers from "../views/Customers.vue";
 import Orders from "../views/Orders.vue";
@@ -13,7 +15,9 @@ import Payments from "../views/Payments.vue";
 import RolePermission from "../views/RolePermission.vue";
 import POS from "../views/POS.vue";
 const routes = [
-  { path: "/", redirect: "/dashboard" },
+  { path: "/", redirect: "/login" },
+  { path: "/login", component: Login },
+  { path: "/profile", component: Profile },
   { path: "/dashboard", component: Dashboard },
   { path: "/customers", component: Customers },
   { path: "/orders", component: Orders },
