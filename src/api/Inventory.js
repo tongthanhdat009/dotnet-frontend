@@ -1,10 +1,11 @@
-import axios from "axios";
-const API_URL = "http://localhost:7000/api/inventory";
+import apiClient from "./apiClient";
+
+const API_URL = "/api/inventory";
 
 // Lấy danh sách tất cả inventory
 export const getInventories = async () => {
   try {
-    const response = await axios.get(API_URL);
+    const response = await apiClient.get(API_URL);
     return response.data;
   } catch (error) {
     console.error("Error fetching inventories:", error);
@@ -15,7 +16,7 @@ export const getInventories = async () => {
 // Lấy inventory theo ID
 export const getInventoryById = async (id) => {
   try {
-    const response = await axios.get(`${API_URL}/${id}`);
+    const response = await apiClient.get(`${API_URL}/${id}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching inventory by ID:", error);
@@ -26,7 +27,7 @@ export const getInventoryById = async (id) => {
 // Lấy inventory theo Product ID
 export const getInventoryByProductId = async (productId) => {
   try {
-    const response = await axios.get(`${API_URL}/product/${productId}`);
+    const response = await apiClient.get(`${API_URL}/product/${productId}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching inventory by product ID:", error);
@@ -37,7 +38,7 @@ export const getInventoryByProductId = async (productId) => {
 // Cập nhật inventory
 export const updateInventory = async (id, inventoryData) => {
   try {
-    const response = await axios.put(`${API_URL}/${id}`, inventoryData);
+    const response = await apiClient.put(`${API_URL}/${id}`, inventoryData);
     return response.data;
   } catch (error) {
     console.error("Error updating inventory:", error);
@@ -48,7 +49,7 @@ export const updateInventory = async (id, inventoryData) => {
 // Cập nhật số lượng inventory theo Product ID
 export const updateQuantity = async (productId, quantity) => {
   try {
-    const response = await axios.patch(
+    const response = await apiClient.patch(
       `${API_URL}/product/${productId}/quantity`,
       quantity
     );

@@ -163,7 +163,7 @@ onMounted(load);
 
 .order-table { width:100%; border-collapse: collapse; }
 .order-table th, .order-table td { border:1px solid #eee; padding:10px; text-align:center; }
-.order-table thead th { background:#f5f6f7; color:#222; }
+.order-table thead th {   background-color: #2c3e50;color: #ffffff; }
 .customer-col { display:flex; flex-direction:column; align-items:flex-start; }
 .customer-col small { color:#6b7280; }
 .actions { display:flex; gap:8px; justify-content:center; }

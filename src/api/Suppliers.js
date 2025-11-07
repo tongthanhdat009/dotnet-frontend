@@ -1,10 +1,10 @@
-import axios from "axios";
+import apiClient from "./apiClient";
 
-const API_URL = "http://localhost:7000/api/suppliers";
+const API_URL = "/api/suppliers";
 
 // 🔹 Lấy danh sách nhà cung cấp
 export async function getSuppliers() {
-  const res = await axios.get(API_URL);
+  const res = await apiClient.get(API_URL);
   return res.data;
 }
 
@@ -16,7 +16,7 @@ export async function addSupplier(supplier) {
     email: supplier.email,
     address: supplier.address,
   };
-  const res = await axios.post(API_URL, payload);
+  const res = await apiClient.post(API_URL, payload);
   return res.data;
 }
 
@@ -28,11 +28,11 @@ export async function updateSupplier(id, supplier) {
     email: supplier.email,
     address: supplier.address,
   };
-  const res = await axios.put(`${API_URL}/${id}`, payload);
+  const res = await apiClient.put(`${API_URL}/${id}`, payload);
   return res.data;
 }
 
 // 🔹 Xóa nhà cung cấp
 export async function deleteSupplier(id) {
-  await axios.delete(`${API_URL}/${id}`);
+  await apiClient.delete(`${API_URL}/${id}`);
 }

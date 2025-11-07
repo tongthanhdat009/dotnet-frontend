@@ -18,8 +18,8 @@
       <input type="text" v-model="searchText" :placeholder="getSearchPlaceholder()" />
     </div>
 
-    <!-- 📝 Form thêm / sửa / xem -->
-    <form class="product-form" @submit.prevent="confirmSave">
+    <!-- 📝 Form thêm / sửa / xem - Chỉ hiển thị nếu có quyền product_manage -->
+    <form v-if="can('product_manage') || !viewMode" class="product-form" @submit.prevent="confirmSave">
       <div class="form-group">
         <label>ID</label>
         <input type="text" :value="displayId(product.ProductId)" readonly />
@@ -83,8 +83,8 @@
         />
       </div>
 
-      <button type="submit" v-if="!viewMode">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
-      <button type="button" v-if="editMode" @click="cancelEdit">Hủy</button>
+      <button type="submit" v-if="!viewMode && can('product_manage')">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
+      <button type="button" v-if="editMode && can('product_manage')" @click="cancelEdit">Hủy</button>
       <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
     </form>
 
@@ -101,7 +101,7 @@
           <th>Mã vạch</th>
           <th>Giá (VNĐ)</th>
           <th>Đơn vị</th>
-          <th>Hành động</th>
+          <th v-if="can('product_manage')">Hành động</th>
         </tr>
       </thead>
       <tbody>
@@ -118,7 +118,7 @@
           <td>{{ p?.Barcode || '-' }}</td>
           <td>{{ formatPrice(p?.Price) }}</td>
           <td>{{ p?.Unit || '-' }}</td>
-          <td>
+          <td v-if="can('product_manage')">
             <button @click.stop="editProduct(p)">✏️</button>
             <button @click.stop="confirmDelete(p?.ProductId)">🗑️</button>
           </td>
@@ -158,6 +158,10 @@ import { ref, computed, onMounted } from "vue";
 import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI } from "../api/Product.js";
 import { getCategories } from "../api/Category.js";
 import { getSuppliers } from "../api/Suppliers.js";
+import { usePermissions } from "../composables/usePermissions.js";
+
+// Permission check
+const { can } = usePermissions();
 
 // ----- Categories & Suppliers từ API
 const categories = ref([]);
