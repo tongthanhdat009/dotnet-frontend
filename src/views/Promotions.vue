@@ -6,8 +6,8 @@
     <div class="search-bar">
       <label for="filterType">Tìm theo:</label>
       <select v-model="filterType" id="filterType">
-        <option value="promo_id">ID</option>
-        <option value="promo_code">Mã khuyến mãi</option>
+        <option value="PromoId">ID</option>
+        <option value="PromoCode">Mã khuyến mãi</option>
       </select>
       <input type="text" v-model="searchText" placeholder="Nhập từ khóa..." />
     </div>
@@ -16,12 +16,12 @@
     <form class="promotion-form" @submit.prevent="confirmAction(editMode ? 'update' : 'add')">
       <div class="form-group">
         <label>ID</label>
-        <input type="text" :value="displayId(promotion.promo_id)" readonly />
+        <input type="text" :value="displayId(promotion.PromoId)" readonly />
       </div>
 
       <div class="form-group">
         <label>Mã khuyến mãi</label>
-        <input v-model="promotion.promo_code" type="text" required placeholder="Nhập mã khuyến mãi" :readonly="viewMode" />
+        <input v-model="promotion.PromoCode" type="text" required placeholder="Nhập mã khuyến mãi" :readonly="viewMode" />
       </div>
 
       <div class="form-group">
@@ -31,7 +31,7 @@
 
       <div class="form-group">
         <label>Loại giảm giá</label>
-        <select v-model="promotion.discount_type" required :disabled="viewMode">
+        <select v-model="promotion.DiscountType" required :disabled="viewMode || (editMode && promotion.UsedCount > 0)">
           <option value="percent">percent</option>
           <option value="fixed">fixed</option>
         </select>
@@ -39,32 +39,32 @@
 
       <div class="form-group">
         <label>Giá trị giảm</label>
-        <input v-model="promotion.discount_value" type="number" step="0.01" required :readonly="viewMode" />
+        <input v-model="promotion.DiscountValue" type="number" step="0.01" required :readonly="viewMode || (editMode && promotion.UsedCount > 0)" />
       </div>
 
       <div class="form-group">
         <label>Ngày bắt đầu</label>
-        <Flatpickr v-model="promotion.start_date" :config="{ dateFormat: 'Y-m-d' }" placeholder="Chọn ngày bắt đầu" :disabled="viewMode" />
+        <Flatpickr v-model="promotion.StartDate" :config="{ dateFormat: 'Y-m-d' }" placeholder="Chọn ngày bắt đầu" :disabled="viewMode" />
       </div>
 
       <div class="form-group">
         <label>Ngày kết thúc</label>
-        <Flatpickr v-model="promotion.end_date" :config="{ dateFormat: 'Y-m-d' }" placeholder="Chọn ngày kết thúc" :disabled="viewMode" />
+        <Flatpickr v-model="promotion.EndDate" :config="{ dateFormat: 'Y-m-d' }" placeholder="Chọn ngày kết thúc" :disabled="viewMode" />
       </div>
 
       <div class="form-group">
         <label>Giá trị tối thiểu đơn hàng</label>
-        <input v-model="promotion.min_order_amount" type="number" step="0.01" :readonly="viewMode" />
+        <input v-model="promotion.MinOrderAmount" type="number" step="0.01" :readonly="viewMode" />
       </div>
 
       <div class="form-group">
         <label>Giới hạn sử dụng</label>
-        <input v-model="promotion.usage_limit" type="number" min="0" :readonly="viewMode" />
+        <input v-model="promotion.UsageLimit" type="number" min="0" :readonly="viewMode" />
       </div>
 
       <div class="form-group">
         <label>Số lượt đã dùng</label>
-        <input v-model="promotion.used_count" type="number" min="0" readonly />
+        <input v-model="promotion.UsedCount" type="number" min="0" readonly />
       </div>
 
       <div class="form-group">
@@ -101,21 +101,21 @@
       <tbody>
         <tr
           v-for="p in filteredPromotions"
-          :key="p.promo_id"
+          :key="p.PromoId"
           @click="viewPromotion(p)"
-          :class="{ active: viewMode && promotion.promo_id === p.promo_id }"
+          :class="{ active: viewMode && promotion.PromoId === p.PromoId }"
         >
-          <td>{{ displayId(p.promo_id) }}</td>
-          <td>{{ p.promo_code }}</td>
-          <td>{{ p.description }}</td>
-          <td>{{ p.discount_type }}</td>
-          <td>{{ formatPrice(p.discount_value) }}</td>
-          <td>{{ p.start_date }}</td>
-          <td>{{ p.end_date }}</td>
-          <td>{{ formatPrice(p.min_order_amount) }}</td>
-          <td>{{ p.usage_limit }}</td>
-          <td>{{ p.used_count }}</td>
-          <td>{{ p.status }}</td>
+          <td>{{ displayId(p.PromoId) }}</td>
+          <td>{{ p.PromoCode }}</td>
+          <td>{{ p.Description }}</td>
+          <td>{{ p.DiscountType }}</td>
+          <td>{{ formatPrice(p.DiscountValue) }}</td>
+          <td>{{ p.StartDate }}</td>
+          <td>{{ p.EndDate }}</td>
+          <td>{{ formatPrice(p.MinOrderAmount) }}</td>
+          <td>{{ p.UsageLimit }}</td>
+          <td>{{ p.UsedCount }}</td>
+          <td>{{ p.Status }}</td>
           <td>
             <button @click.stop="editPromotion(p)">✏️</button>
             <button @click.stop="confirmAction('delete', p)">🗑️</button>
@@ -142,44 +142,18 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import Flatpickr from "vue-flatpickr-component";
 import "flatpickr/dist/flatpickr.css";
+import * as PromotionApi from "../api/Promotion";
 
-const promotions = ref([
-  {
-    promo_id: 1,
-    promo_code: "SUMMER10",
-    description: "Giảm 10% mùa hè",
-    discount_type: "percent",
-    discount_value: 10,
-    start_date: "2025-06-01",
-    end_date: "2025-06-30",
-    min_order_amount: 0,
-    usage_limit: 100,
-    used_count: 0,
-    status: "active",
-  },
-  {
-    promo_id: 2,
-    promo_code: "OFF50K",
-    description: "Giảm 50.000 VNĐ",
-    discount_type: "fixed",
-    discount_value: 50000,
-    start_date: "2025-07-01",
-    end_date: "2025-07-31",
-    min_order_amount: 200000,
-    usage_limit: 50,
-    used_count: 0,
-    status: "inactive",
-  },
-]);
+const promotions = ref([]);
 
 const promotion = ref({});
 const editMode = ref(false);
 const viewMode = ref(false);
 const searchText = ref("");
-const filterType = ref("promo_id");
+const filterType = ref("PromoId");
 
 const showPopup = ref(false);
 const popupAction = ref("");
@@ -191,14 +165,15 @@ const filteredPromotions = computed(() => {
   const keyword = searchText.value.toLowerCase().trim();
   if (!keyword) return promotions.value;
   return promotions.value.filter(p => {
-    if (filterType.value === "promo_id") return displayId(p.promo_id).toLowerCase().includes(keyword);
-    if (filterType.value === "promo_code") return p.promo_code.toLowerCase().includes(keyword);
+    if (filterType.value === "PromoId") return displayId(p.PromoId).toLowerCase().includes(keyword);
+    if (filterType.value === "PromoCode") return p.PromoCode.toLowerCase().includes(keyword);
     return false;
   });
 });
 
 function displayId(id) {
-  return "PR" + id.toString().padStart(3, "0");
+  if (id == null || id === undefined) return "PR000";
+  return "PR" + String(id).padStart(3, "0");
 }
 
 function formatPrice(val) {
@@ -226,7 +201,7 @@ function handleConfirm() {
   if (popupAction.value === "add") savePromotion();
   else if (popupAction.value === "update") savePromotion(true);
   else if (popupAction.value === "delete" && popupTarget.value)
-    promotions.value = promotions.value.filter(p => p.promo_id !== popupTarget.value.promo_id);
+    doDelete(popupTarget.value);
   closePopup();
 }
 
@@ -235,16 +210,22 @@ function closePopup() {
 }
 
 /* ----------------- CRUD ----------------- */
-function savePromotion(isUpdate = false) {
-  if (isUpdate || editMode.value) {
-    const index = promotions.value.findIndex(p => p.promo_id === promotion.value.promo_id);
-    if (index !== -1) promotions.value[index] = { ...promotion.value };
-    editMode.value = false;
-  } else {
-    const nextId = promotions.value.length > 0 ? Math.max(...promotions.value.map(p => p.promo_id)) + 1 : 1;
-    promotions.value.push({ ...promotion.value, promo_id: nextId });
+async function savePromotion(isUpdate = false) {
+  try {
+    if (isUpdate || editMode.value) {
+      const updated = await PromotionApi.updatePromotion(promotion.value.PromoId, promotion.value);
+      const idx = promotions.value.findIndex((p) => p.PromoId === updated.PromoId);
+      if (idx !== -1) promotions.value[idx] = updated;
+      editMode.value = false;
+    } else {
+      const created = await PromotionApi.createPromotion(promotion.value);
+      promotions.value.push(created);
+    }
+    resetForm();
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || "Lỗi khi lưu khuyến mãi";
+    alert(msg);
   }
-  resetForm();
 }
 
 function editPromotion(p) {
@@ -271,23 +252,45 @@ function cancelEdit() {
 }
 
 function resetForm() {
-  const nextId = promotions.value.length > 0 ? Math.max(...promotions.value.map(p => p.promo_id)) + 1 : 1;
+  const nextId = promotions.value.length > 0 ? Math.max(...promotions.value.map(p => p.PromoId)) + 1 : 1;
   promotion.value = {
-    promo_id: nextId,
-    promo_code: "",
-    description: "",
-    discount_type: "percent",
-    discount_value: 0,
-    start_date: "",
-    end_date: "",
-    min_order_amount: 0,
-    usage_limit: 0,
-    used_count: 0,
-    status: "active",
+    PromoId: nextId,
+    PromoCode: "",
+    Description: "",
+    DiscountType: "percent",
+    DiscountValue: 0,
+    StartDate: "",
+    EndDate: "",
+    MinOrderAmount: 0,
+    UsageLimit: 0,
+    UsedCount: 0,
+    Status: "active",
   };
 }
 
 resetForm();
+
+// load data
+onMounted(async () => {
+  try {
+    promotions.value = await PromotionApi.getPromotions();
+  } catch (err) {
+    console.error(err);
+    alert("Không thể tải danh sách khuyến mãi. Kiểm tra backend.");
+  }
+});
+
+// delete helper
+async function doDelete(target) {
+  try {
+    await PromotionApi.deletePromotion(target.PromoId);
+    promotions.value = promotions.value.filter((p) => p.PromoId !== target.PromoId);
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message || "Lỗi khi xóa";
+    alert(msg);
+  }
+}
+
 </script>
 
 <style scoped>
