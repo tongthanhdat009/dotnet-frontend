@@ -83,7 +83,7 @@ const routes = [
     component: Products,
     meta: {
       requiresAuth: true,
-      actionKey: "product_view",
+      actionKey: "product_manage",
       icon: "📦",
       label: "Products",
     },
