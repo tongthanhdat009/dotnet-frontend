@@ -99,7 +99,7 @@
 
         <div class="form-group">
           <label>Action key</label>
-          <input v-model="permission.action_key" required placeholder="action_key..." />
+          <input v-model="permission.action_key" required placeholder="action_key..." :disabled="editPermMode" />
         </div>
 
         <div class="form-group">

@@ -112,8 +112,8 @@
           :class="{ active: viewMode && product.ProductId === p?.ProductId }"
         >
           <td>{{ displayId(p?.ProductId) }}</td>
-          <td>{{ p?.Category.CategoryName || '-' }}</td>
-          <td>{{ p?.Supplier.Name || '-' }}</td>
+          <td>{{ p?.Category?.CategoryName || '-' }}</td>
+          <td>{{ p?.Supplier?.Name || '-' }}</td>
           <td>{{ p?.ProductName || '-' }}</td>
           <td>{{ p?.Barcode || '-' }}</td>
           <td>{{ formatPrice(p?.Price) }}</td>
@@ -205,15 +205,19 @@ const filteredProducts = computed(() => {
       return (
         vietnameseIncludes(p.ProductId, keyword) ||
         vietnameseIncludes(p.ProductName, keyword) ||
-        vietnameseIncludes(p.CategoryName, keyword) ||
-        vietnameseIncludes(p.SupplierName, keyword) ||
+        vietnameseIncludes(p?.Category?.CategoryName, keyword) ||
+        vietnameseIncludes(p?.Supplier?.Name, keyword) ||
         vietnameseIncludes(p.Barcode, keyword) ||
         vietnameseIncludes(p.Price, keyword) ||
         vietnameseIncludes(p.Unit, keyword)
       );
     }
 
-    const fieldValue = p[filterType.value];
+    // Support searching nested fields (CategoryName / SupplierName)
+    let fieldValue = null;
+    if (filterType.value === 'CategoryName') fieldValue = p?.Category?.CategoryName;
+    else if (filterType.value === 'SupplierName') fieldValue = p?.Supplier?.Name;
+    else fieldValue = p[filterType.value];
     if (fieldValue == null) return false;
 
     // 🔍 Nếu lọc theo ID
