@@ -373,8 +373,8 @@ const selectedCustomer = ref(null);
 const subtotal = ref(0);
 const total = ref(0);
 
-// Simple current user id (replace with real auth later)
-const currentUserId = ref(3);
+// Lấy ID người dùng hiện tại từ localStorage
+const currentUserId = ref(Number(localStorage.getItem('IDTaiKhoan')));
 
 // State for new customer search
 const customerSearchQuery = ref('');

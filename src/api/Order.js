@@ -38,13 +38,24 @@ export const fetchOrderById = async (orderId) => {
   }
 };
 
-// Get all orders
+// Get all offline orders
 export const fetchOrders = async () => {
   try {
-    const res = await apiClient.get(`${API_URL}/order`);
+    const res = await apiClient.get(`${API_URL}/order/offline`);
     return res.data;
   } catch (error) {
     console.error("Failed to fetch orders:", error);
+    throw error;
+  }
+};
+
+// Get all online orders
+export const fetchOrdersOnline = async () => {
+  try {
+    const res = await apiClient.get(`${API_URL}/order/online`);
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch online orders:", error);
     throw error;
   }
 };

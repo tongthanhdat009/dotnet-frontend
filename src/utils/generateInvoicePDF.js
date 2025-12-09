@@ -8,106 +8,135 @@ export function generateInvoicePDF(order) {
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 20;
+  
+  // --- Cấu hình màu sắc & Font ---
+  const primaryColor = [52, 73, 94]; // Dark Blue/Grey - Professional
+  const accentColor = [41, 128, 185]; // Blue - Highlight
+  const grayColor = [127, 140, 141];
+  const lightGrayColor = [248, 249, 250];
+  const whiteColor = [255, 255, 255];
 
-  // 🔹 Thêm font tiếng Việt
   doc.addFileToVFS("Roboto-Regular.ttf", robotoRegularBase64);
   doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
   doc.addFont("Roboto-Regular.ttf", "Roboto", "bold");
+  doc.addFont("Roboto-Regular.ttf", "Roboto", "italic");
   doc.setFont("Roboto");
 
-  // --- 1. Header (Thông tin cửa hàng & Thông tin hóa đơn) ---
-  // (Giữ nguyên)
+  let y = 20;
+
+  // --- 1. HEADER ---
+  // Logo / Store Name (Left)
+  doc.setFontSize(22);
   doc.setFont("Roboto", "bold");
-  doc.setFontSize(16);
-  doc.text("TÊN CỬA HÀNG CỦA BẠN", margin, y);
+  doc.setTextColor(...primaryColor);
+  doc.text("TÊN CỬA HÀNG", margin, y);
+  
+  // Invoice Title (Right)
+  doc.setFontSize(22);
+  doc.setTextColor(...accentColor);
+  doc.text("HÓA ĐƠN", pageWidth - margin, y, { align: "right" });
+
+  y += 8;
+
+  // Store Info (Left)
+  doc.setFontSize(9);
   doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
-  y += 6;
+  doc.setTextColor(...grayColor);
   doc.text("123 Đường ABC, Phường X, Quận Y, TP. Z", margin, y);
-  y += 5;
-  doc.text("Điện thoại: (028) 3812 3456", margin, y);
-  y += 5;
-  doc.text("Website: www.ten-cua-hang.com", margin, y);
-
-  let rightColY = 20;
+  
+  // Invoice Details (Right)
+  doc.setTextColor(0, 0, 0);
   doc.setFont("Roboto", "bold");
-  doc.setFontSize(20);
-  doc.text("HOÁ ĐƠN BÁN HÀNG", pageWidth - margin, rightColY, { align: "right" });
-  rightColY += 9;
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
-  doc.text(`Mã đơn: #${order.OrderId}`, pageWidth - margin, rightColY, { align: "right" });
-  rightColY += 5;
-  doc.text(`Ngày lập: ${new Date(order.OrderDate).toLocaleString()}`, pageWidth - margin, rightColY, { align: "right" });
-  rightColY += 5;
-  doc.text(`Người lập: ${order.User?.FullName || "—"}`, pageWidth - margin, rightColY, { align: "right" });
+  doc.text(`#${order.OrderId}`, pageWidth - margin, y, { align: "right" });
 
-  y = Math.max(y, rightColY) + 10;
-  doc.setDrawColor(200, 200, 200);
+  y += 5;
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...grayColor);
+  doc.text("Hotline: (028) 3812 3456", margin, y);
+  
+  doc.text(`Ngày: ${new Date(order.OrderDate).toLocaleString('vi-VN')}`, pageWidth - margin, y, { align: "right" });
+
+  y += 5;
+  doc.text("Website: www.website-cua-ban.com", margin, y);
+  
+  // Conditional Staff Name
+  if (order.User?.FullName) {
+      doc.text(`Nhân viên: ${order.User.FullName}`, pageWidth - margin, y, { align: "right" });
+  }
+
+  y += 10;
+  // Divider line
+  doc.setDrawColor(230, 230, 230);
+  doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
   y += 10;
 
-  // --- 2. Thông tin chung (2 CỘT) ---
-  let yLeft = y;
-  let yRight = y;
-  const rightColX = 120; // Vị trí bắt đầu của cột phải
-
-  // --- Cột trái: Khách hàng ---
-  doc.setFont("Roboto", "bold");
-  doc.setFontSize(12);
-  doc.text("THÔNG TIN KHÁCH HÀNG", margin, yLeft);
-  yLeft += 6;
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
-
-  doc.text(`Tên khách hàng: ${order.Customer?.Name || "—"}`, margin, yLeft);
-  yLeft += 5;
-
-  // Xử lý địa chỉ dài tự động xuống dòng
-  const customerAddress = doc.splitTextToSize(
-    `Địa chỉ: ${order.Customer?.Address || "—"}`,
-    (rightColX - margin - 5) // Giới hạn chiều rộng của cột trái
-  );
-  doc.text(customerAddress, margin, yLeft);
-  yLeft += (customerAddress.length * 5); // Tăng y dựa trên số dòng địa chỉ
-
-  doc.text(`Điện thoại: ${order.Customer?.Phone || "—"}`, margin, yLeft);
+  // --- 2. INFO BOXES ---
+  const boxGap = 10;
+  const boxWidth = (pageWidth - margin * 2 - boxGap) / 2;
+  const boxHeight = 40;
   
-  // --- Cột phải: Đơn hàng (ĐÃ THÊM) ---
-  doc.setFont("Roboto", "bold");
-  doc.setFontSize(12);
-  doc.text("THÔNG TIN ĐƠN HÀNG", rightColX, yRight);
-  yRight += 6;
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
+  // Background for boxes
+  doc.setFillColor(...lightGrayColor);
+  doc.roundedRect(margin, y, boxWidth, boxHeight, 2, 2, 'F');
+  doc.roundedRect(margin + boxWidth + boxGap, y, boxWidth, boxHeight, 2, 2, 'F');
 
-  // Phương thức thanh toán
-  const paymentMethods = (order.Payments || [])
-    .map(p => p.PaymentMethod)
-    .join(", ");
+  // Left Box: Customer
+  let yBox = y + 8;
+  let xBox = margin + 5;
   
-  doc.text("Phương thức TT:", rightColX, yRight);
+  doc.setFontSize(10);
   doc.setFont("Roboto", "bold");
-  doc.text(paymentMethods || "—", rightColX + 35, yRight);
-  yRight += 6;
-
-  // Trạng thái (ĐÃ DI CHUYỂN LÊN)
+  doc.setTextColor(...primaryColor);
+  doc.text("KHÁCH HÀNG", xBox, yBox);
+  
+  yBox += 7;
+  doc.setFontSize(9);
   doc.setFont("Roboto", "normal");
-  doc.text("Trạng thái:", rightColX, yRight);
+  doc.setTextColor(0, 0, 0);
+  
+  doc.text(order.Customer?.Name || "Khách lẻ", xBox, yBox);
+  yBox += 5;
+  doc.setTextColor(...grayColor);
+  doc.text(order.Customer?.Phone || "", xBox, yBox);
+  yBox += 5;
+  
+  const addressLines = doc.splitTextToSize(order.Customer?.Address || "", boxWidth - 10);
+  doc.text(addressLines, xBox, yBox);
+
+  // Right Box: Payment & Status
+  yBox = y + 8;
+  xBox = margin + boxWidth + boxGap + 5;
+
+  doc.setFontSize(10);
   doc.setFont("Roboto", "bold");
-  doc.text(order.Status || "—", rightColX + 35, yRight);
+  doc.setTextColor(...primaryColor);
+  doc.text("THÔNG TIN THANH TOÁN", xBox, yBox);
 
-  // Cập nhật y chung
-  y = Math.max(yLeft, yRight) + 15; // Lấy y của cột cao hơn + 15px đệm
+  yBox += 7;
+  doc.setFontSize(9);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...grayColor);
+  
+  doc.text("Hình thức:", xBox, yBox);
+  doc.setTextColor(0, 0, 0);
+  const paymentMethods = (order.Payments || []).map(p => p.PaymentMethod).join(", ");
+  doc.text(paymentMethods || "Tiền mặt", xBox + 20, yBox);
+  
+  yBox += 6;
+  doc.setTextColor(...grayColor);
+  doc.text("Trạng thái:", xBox, yBox);
+  doc.setTextColor(0, 0, 0);
+  doc.text(order.Status || "Hoàn thành", xBox + 20, yBox);
 
-  // --- 3. Bảng sản phẩm ---
-  // (Giữ nguyên)
+  y += boxHeight + 10;
+
+  // --- 3. PRODUCT TABLE ---
   const items = order.OrderItems?.map((item, i) => [
     i + 1,
-    item.Product?.ProductName || "",
+    item.Product?.ProductName || "Sản phẩm",
     item.Quantity,
     item.Price.toLocaleString("vi-VN"),
     item.Subtotal.toLocaleString("vi-VN"),
@@ -115,76 +144,124 @@ export function generateInvoicePDF(order) {
 
   autoTable(doc, {
     startY: y,
-    head: [["STT", "Sản phẩm", "Số lượng", "Đơn giá (₫)", "Thành tiền (₫)"]],
+    head: [["STT", "Tên sản phẩm", "SL", "Đơn giá", "Thành tiền"]],
     body: items,
-    theme: 'grid',
+    theme: 'plain', // Cleaner look
     styles: { 
       font: "Roboto", 
-      fontSize: 10,
-      cellPadding: 3
+      fontSize: 9,
+      cellPadding: 4,
+      valign: 'middle',
+      textColor: [50, 50, 50]
     },
     headStyles: {
-      fillColor: [41, 128, 185],
-      textColor: 255,
+      fillColor: whiteColor,
+      textColor: primaryColor,
       fontStyle: 'bold',
-      fontSize: 11
+      lineWidth: 0,
+      borderBottomWidth: 1,
+      borderColor: [200, 200, 200]
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { cellWidth: 'auto' },
+      2: { halign: 'center', cellWidth: 15 },
+      3: { halign: 'right', cellWidth: 30 },
+      4: { halign: 'right', cellWidth: 35 }
     },
     alternateRowStyles: {
-      fillColor: [245, 245, 245]
-    }
+      fillColor: [252, 252, 252]
+    },
+    didParseCell: function(data) {
+        // Add bottom border to body rows
+        if (data.section === 'body') {
+             data.cell.styles.borderBottomWidth = 0.1;
+             data.cell.styles.borderColor = [240, 240, 240];
+        }
+    },
+    margin: { left: margin, right: margin }
   });
 
   let finalY = doc.lastAutoTable.finalY + 10;
 
-  // --- 4. Tổng tiền (ĐÃ SỬA LỖI ĐÈ NHAU) ---
-  // Đặt vị trí cố định cho Nhãn và căn lề phải cho Giá trị
-  const rightAlignX = pageWidth - margin; // Vị trí căn lề phải (VD: 195)
-  const labelX = 140; // Vị trí cố định cho nhãn (VD: 140)
+  // --- 4. SUMMARY SECTION ---
+  // Use a right-aligned box for summary
+  const summaryWidth = 80;
+  const summaryX = pageWidth - margin - summaryWidth;
   
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(11);
-  
-  doc.text("Tổng cộng:", labelX, finalY);
-  doc.text(`${order.TotalAmount.toLocaleString("vi-VN")} ₫`, rightAlignX, finalY, { align: "right" });
-  finalY += 7;
+  doc.setFontSize(9);
+  doc.setTextColor(...grayColor);
 
-  doc.text("Giảm giá:", labelX, finalY);
-  doc.text(`${order.DiscountAmount.toLocaleString("vi-VN")} ₫`, rightAlignX, finalY, { align: "right" });
-  finalY += 7;
-  
-  // Vẽ đường kẻ ngay trên Thành tiền
-  doc.line(labelX, finalY, rightAlignX, finalY);
-  finalY += 7;
-  
+  // Subtotal
+  doc.text("Tổng tiền hàng:", summaryX, finalY);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`${order.TotalAmount.toLocaleString("vi-VN")} ₫`, pageWidth - margin, finalY, { align: "right" });
+  finalY += 6;
+
+  // Discount
+  if (order.DiscountAmount > 0) {
+    doc.setTextColor(...grayColor);
+    doc.text("Giảm giá:", summaryX, finalY);
+    doc.setTextColor(231, 76, 60);
+    doc.text(`- ${order.DiscountAmount.toLocaleString("vi-VN")} ₫`, pageWidth - margin, finalY, { align: "right" });
+    finalY += 6;
+  }
+
+  // Divider
+  doc.setDrawColor(220, 220, 220);
+  doc.line(summaryX, finalY, pageWidth - margin, finalY);
+  finalY += 8;
+
+  // Grand Total
+  doc.setFontSize(11);
   doc.setFont("Roboto", "bold");
-  doc.setFontSize(13);
-  doc.text("Thành tiền:", labelX, finalY);
-  doc.text(`${(order.TotalAmount - order.DiscountAmount).toLocaleString("vi-VN")} ₫`, rightAlignX, finalY, { align: "right" });
-
-  // --- 5. Phần chân (Footer) ---
-  // (ĐÃ XÓA PT THANH TOÁN VÀ TRẠNG THÁI)
-  finalY += 20; // Tăng khoảng cách trước khi kẻ
-  doc.line(margin, finalY, pageWidth - margin, finalY);
-  finalY += 10;
-
-  const footerRightX = pageWidth - margin - 60; // Vị trí cột chữ ký
+  doc.setTextColor(...primaryColor);
+  doc.text("TỔNG THANH TOÁN", summaryX, finalY);
   
-  // Cột phải: Chữ ký
-  let footerRightY = finalY;
+  doc.setFontSize(14);
+  doc.setTextColor(...accentColor);
+  doc.text(`${(order.TotalAmount - order.DiscountAmount).toLocaleString("vi-VN")} ₫`, pageWidth - margin, finalY, { align: "right" });
+
+  // --- 5. SIGNATURES ---
+  finalY += 25;
+  
+  if (finalY > pageHeight - 40) {
+      doc.addPage();
+      finalY = 20;
+  }
+
+  const sigY = finalY;
+  
+  doc.setFontSize(9);
   doc.setFont("Roboto", "bold");
-  doc.setFontSize(11);
-  doc.text("Người lập hóa đơn", footerRightX, footerRightY, { align: 'center', maxWidth: 60 });
-  footerRightY += 6;
+  doc.setTextColor(0, 0, 0);
+  
+  // Buyer
+  doc.text("Người mua hàng", margin + 25, sigY, { align: "center" });
   doc.setFont("Roboto", "normal");
-  doc.setFontSize(10);
-  doc.text("(Ký và ghi rõ họ tên)", footerRightX, footerRightY, { align: 'center', maxWidth: 60 });
+  doc.setFontSize(8);
+  doc.setTextColor(...grayColor);
+  doc.text("(Ký, ghi rõ họ tên)", margin + 25, sigY + 4, { align: "center" });
 
-  // --- Lời cảm ơn (Dưới cùng) ---
-  finalY = footerRightY + 30; // Lấy y của chữ ký + 30
-  doc.setFontSize(11);
+  // Seller
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(9);
+  doc.text("Người bán hàng", pageWidth - margin - 25, sigY, { align: "center" });
   doc.setFont("Roboto", "normal");
-  doc.text("Cảm ơn quý khách và hẹn gặp lại!", pageWidth / 2, finalY, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(...grayColor);
+  doc.text("(Ký, ghi rõ họ tên)", pageWidth - margin - 25, sigY + 4, { align: "center" });
 
-  // --- Hiển thị PDF ---
+  // --- 6. FOOTER ---
+  const footerY = pageHeight - 15;
+  doc.setDrawColor(240, 240, 240);
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+  
+  doc.setFontSize(8);
+  doc.setTextColor(...grayColor);
+  doc.setFont("Roboto", "italic");
+  doc.text("Cảm ơn quý khách đã mua sắm tại cửa hàng!", pageWidth / 2, footerY, { align: "center" });
+
   window.open(doc.output("bloburl"), "_blank");
 }
