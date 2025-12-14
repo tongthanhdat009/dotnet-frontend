@@ -8,6 +8,11 @@ export async function getProducts() {
   return res.data;
 }
 
+export async function getProductsPos() {
+  const res = await apiClient.get(`${API_URL}/pos`);
+  return res.data;
+}
+
 export async function getTotalProducts() {
   const res = await apiClient.get(`${API_URL}/total`);
   return res.data;

@@ -21,7 +21,8 @@
           <th>ID</th>
           <th>Khách hàng</th>
           <th>Ngày đặt</th>
-          <th>Trạng thái</th>
+          <th>Trạng thái Đơn</th>
+          <th>Thanh toán</th>
           <th>Tổng tiền</th>
           <th>Giảm giá</th>
           <th>Hành động</th>
@@ -37,17 +38,32 @@
             </div>
           </td>
           <td>{{ formatDate(o.OrderDate) }}</td>
-          <td><span :class="['badge', o.Status]">{{ o.Status }}</span></td>
+          <td><span :class="['badge', o.OrderStatus]">{{ o.OrderStatus }}</span></td>
+          <td><span :class="['badge', o.PayStatus]">{{ o.PayStatus }}</span></td>
           <td>{{ formatCurrency(o.TotalAmount) }}</td>
           <td>{{ formatCurrency(o.DiscountAmount) }}</td>
           <td class="actions">
+            <button 
+              v-if="getNextAction(o.OrderStatus)" 
+              class="btn-approve" 
+              @click="advanceStatus(o)"
+            >
+              {{ getNextAction(o.OrderStatus).label }}
+            </button>
+            <button 
+              v-if="o.OrderStatus !== 'completed' && o.OrderStatus !== 'canceled' && o.PayStatus === 'pending'" 
+              class="btn-cancel" 
+              @click="cancelOrder(o)"
+            >
+              Hủy
+            </button>
             <button class="btn-outline" :disabled="generatingId === o.OrderId" @click="openDetail(o.OrderId)">
               {{ generatingId === o.OrderId ? 'Đang tạo PDF…' : 'Xem chi tiết' }}
             </button>
           </td>
         </tr>
         <tr v-if="filtered.length === 0">
-          <td colspan="7">Không có dữ liệu phù hợp</td>
+          <td colspan="8">Không có dữ liệu phù hợp</td>
         </tr>
       </tbody>
     </table>
@@ -56,7 +72,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { fetchOrdersOnline, fetchOrderById } from '../api/Order.js';
+import { fetchOrdersOnline, fetchOrderById, updateOrderStatus, cancelOrder as apiCancelOrder } from '../api/Order.js';
 import { generateInvoicePDF } from '../utils/generateInvoicePDF.js';
 
 const orders = ref([]);
@@ -91,6 +107,45 @@ async function load() {
     error.value = e?.response?.data?.message || e?.message || 'Không thể tải danh sách đơn hàng online.';
   } finally {
     loading.value = false;
+  }
+}
+
+const statusFlow = {
+  'pending': { next: 'approved', label: 'Duyệt đơn' },
+  'approved': { next: 'processing', label: 'Xử lý' },
+  'processing': { next: 'shipping', label: 'Giao hàng' },
+  'shipping': { next: 'delivered', label: 'Đã giao' },
+  'delivered': { next: 'completed', label: 'Hoàn tất' }
+};
+
+function getNextAction(currentStatus) {
+  return statusFlow[currentStatus];
+}
+
+async function advanceStatus(order) {
+  const action = getNextAction(order.OrderStatus);
+  if (!action) return;
+
+  if (!confirm(`Xác nhận chuyển trạng thái đơn hàng ${displayId(order.OrderId)} sang "${action.label}"?`)) return;
+
+  try {
+    await updateOrderStatus(order.OrderId, action.next);
+    await load(); 
+  } catch (e) {
+    console.error(e);
+    alert(e?.response?.data || e?.message || 'Lỗi khi cập nhật trạng thái');
+  }
+}
+
+async function cancelOrder(order) {
+  if (!confirm(`Bạn có chắc muốn hủy đơn hàng ${displayId(order.OrderId)}? Hành động này sẽ hoàn kho (nếu đã duyệt) và không thể hoàn tác.`)) return;
+  try {
+    await apiCancelOrder(order.OrderId);
+    await load();
+    alert('Đã hủy đơn hàng thành công!');
+  } catch (e) {
+    console.error(e);
+    alert(e?.response?.data?.message || e?.message || 'Lỗi khi hủy đơn hàng');
   }
 }
 
@@ -131,8 +186,19 @@ onMounted(load);
 .btn-outline:hover { background:#1abc9c; color:#fff; }
 .btn-outline:disabled { opacity:.5; cursor:not-allowed; }
 
+.btn-approve { padding:6px 10px; border:none; color:#fff; background:#28a745; border-radius:6px; font-weight:600; cursor:pointer; }
+.btn-approve:hover { background:#218838; }
+
+.btn-cancel { padding:6px 10px; border:none; color:#fff; background:#dc3545; border-radius:6px; font-weight:600; cursor:pointer; }
+.btn-cancel:hover { background:#c82333; }
+
 .badge { padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; text-transform:uppercase; }
 .badge.paid { background:#e6fffa; color:#0f766e; }
 .badge.pending { background:#fff7ed; color:#b45309; }
 .badge.canceled { background:#fee2e2; color:#b91c1c; }
+.badge.approved { background:#e3f2fd; color:#0d47a1; }
+.badge.processing { background:#fff3cd; color:#856404; }
+.badge.shipping { background:#d1ecf1; color:#0c5460; }
+.badge.delivered { background:#d4edda; color:#155724; }
+.badge.completed { background:#c3e6cb; color:#155724; }
 </style>

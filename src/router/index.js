@@ -5,6 +5,7 @@ import Dashboard from "../views/Dashboard.vue";
 import Customers from "../views/Customers.vue";
 import Orders from "../views/Orders.vue";
 import OrdersOnline from "../views/OrdersOnline.vue";
+import Refunds from "../views/Refunds.vue";
 import Products from "../views/Products.vue";
 import Users from "../views/Users.vue";
 import Categories from "../views/Categories.vue";
@@ -127,6 +128,16 @@ const routes = [
       actionKey: "order_manage",
       icon: "🌐",
       label: "Orders Online",
+    },
+  },
+  {
+    path: "/refunds",
+    component: Refunds,
+    meta: {
+      requiresAuth: true,
+      actionKey: "order_manage",
+      icon: "💸",
+      label: "Refunds",
     },
   },
   {

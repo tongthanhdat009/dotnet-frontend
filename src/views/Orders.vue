@@ -21,7 +21,8 @@
           <th>ID</th>
           <th>Khách hàng</th>
           <th>Ngày đặt</th>
-          <th>Trạng thái</th>
+          <th>TT Thanh toán</th>
+          <th>TT Đơn hàng</th>
           <th>Tổng tiền</th>
           <th>Giảm giá</th>
           <th>Hành động</th>
@@ -37,18 +38,19 @@
             </div>
           </td>
           <td>{{ formatDate(o.OrderDate) }}</td>
-          <td><span :class="['badge', o.Status]">{{ o.Status }}</span></td>
+          <td><span :class="['badge', o.PayStatus]">{{ o.PayStatus }}</span></td>
+          <td><span :class="['badge', o.OrderStatus]">{{ o.OrderStatus }}</span></td>
           <td>{{ formatCurrency(o.TotalAmount) }}</td>
           <td>{{ formatCurrency(o.DiscountAmount) }}</td>
           <td class="actions">
             <button class="btn-outline" :disabled="generatingId === o.OrderId" @click="openDetail(o.OrderId)">
               {{ generatingId === o.OrderId ? 'Đang tạo PDF…' : 'Xem chi tiết' }}
             </button>
-            <button class="btn-danger" :disabled="o.Status === 'canceled'" @click="confirmCancel(o)">Hủy đơn</button>
+            <button class="btn-danger" :disabled="o.OrderStatus === 'canceled'" @click="confirmCancel(o)">Hủy đơn</button>
           </td>
         </tr>
         <tr v-if="filtered.length === 0">
-          <td colspan="7">Không có dữ liệu phù hợp</td>
+          <td colspan="8">Không có dữ liệu phù hợp</td>
         </tr>
       </tbody>
     </table>
@@ -140,7 +142,13 @@ async function doCancel() {
   try {
     await cancelOrder(pendingOrder.value.OrderId);
     const idx = orders.value.findIndex(x => x.OrderId === pendingOrder.value.OrderId);
-    if (idx >= 0) orders.value[idx] = { ...orders.value[idx], Status: 'canceled' };
+    if (idx >= 0) {
+      orders.value[idx] = { 
+        ...orders.value[idx], 
+        OrderStatus: 'canceled',
+        PayStatus: orders.value[idx].PayStatus === 'pending' ? 'canceled' : 'refunded'
+      };
+    }
     closeConfirm();
   } catch (e) {
     cancelError.value = e?.response?.data?.message || e?.message || 'Hủy đơn thất bại.';
@@ -177,6 +185,12 @@ onMounted(load);
 .badge.paid { background:#e6fffa; color:#0f766e; }
 .badge.pending { background:#fff7ed; color:#b45309; }
 .badge.canceled { background:#fee2e2; color:#b91c1c; }
+.badge.refunded { background:#f3e8ff; color:#7e22ce; }
+.badge.completed { background:#dcfce7; color:#15803d; }
+.badge.approved { background:#e0f2fe; color:#0369a1; }
+.badge.processing { background:#ffedd5; color:#c2410c; }
+.badge.shipping { background:#fef9c3; color:#a16207; }
+.badge.delivered { background:#d1fae5; color:#047857; }
 
 /* Modal styles removed because we navigate to detail page */
 

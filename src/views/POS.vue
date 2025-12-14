@@ -45,7 +45,10 @@
             class="product-card"
             @click="addToCart(product)"
           >
-            <div class="product-image">📦</div>
+            <div class="product-image">
+              <img v-if="product.ImageUrl" :src="product.ImageUrl" alt="Product Image" class="real-product-img" />
+              <span v-else>📦</span>
+            </div>
             <div class="product-info">
               <div class="product-name">{{ product.ProductName }}</div>
               <div class="product-price">{{ formatCurrency(product.Price) }}</div>
@@ -343,10 +346,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { getCategories } from '../api/Category.js';
-import { getProducts } from '../api/Product.js';
+import { getProductsPos } from '../api/Product.js';
 import { fetchCustomers, addCustomer } from '../api/Customer.js';
 import { fetchPromotions, createOrder } from '../api/Order.js';
 import { getInventories } from '../api/Inventory.js';
+import { getCurrentUser } from '../api/Auth.js';
 import { generateInvoicePDF } from '../utils/generateInvoicePDF';
 
 const loading = ref(true);
@@ -373,8 +377,8 @@ const selectedCustomer = ref(null);
 const subtotal = ref(0);
 const total = ref(0);
 
-// Lấy ID người dùng hiện tại từ localStorage
-const currentUserId = ref(Number(localStorage.getItem('IDTaiKhoan')));
+// Lấy ID người dùng hiện tại từ API
+const currentUserId = ref(null);
 
 // State for new customer search
 const customerSearchQuery = ref('');
@@ -421,17 +425,23 @@ async function loadData() {
   error.value = '';
   
   try {
-    const [categoriesRes, productsRes, customersRes, promotionsRes, inventoriesRes] = await Promise.all([
+    const [categoriesRes, productsRes, customersRes, promotionsRes, inventoriesRes, userRes] = await Promise.all([
       getCategories(),
-      getProducts(),
+      getProductsPos(),
       fetchCustomers(),
       fetchPromotions(),
-      getInventories()
+      getInventories(),
+      getCurrentUser()
     ]);
 
     console.log('Categories:', categoriesRes);
     console.log('Products:', productsRes);
     console.log('Customers:', customersRes);
+    console.log('Current User:', userRes);
+
+    if (userRes && userRes.UserId) {
+      currentUserId.value = Number(userRes.UserId);
+    }
 
   categories.value = categoriesRes;
   products.value = productsRes;
@@ -1035,6 +1045,17 @@ onMounted(() => {
 .product-image {
   font-size: 64px;
   margin-bottom: 14px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.real-product-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .search-box {

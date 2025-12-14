@@ -60,17 +60,13 @@ export const fetchOrdersOnline = async () => {
   }
 };
 
-// Cancel an order; tries common REST patterns; returns server response
+// Cancel an order (Admin)
 export const cancelOrder = async (orderId) => {
   try {
-    // Theo BE: PUT http://localhost:7000/api/Order/{id}/cancel, trả về { message, error? }
-    const res = await apiClient.put(`${API_URL}/Order/${orderId}/cancel`);
-    console.log(`Order ${orderId} cancelled successfully:`, res.data);
-    return res.data; // { message: string, error?: string }
+    const res = await apiClient.put(`${API_URL}/Order/${orderId}/cancel-admin`);
+    return res.data;
   } catch (error) {
-    // Ném ra với message rõ ràng từ BE nếu có
-    const msg =
-      error?.response?.data?.message || error?.message || "Cancel order failed";
+    const msg = error?.response?.data?.message || error?.message || "Cancel order failed";
     console.error(`Failed to cancel order ${orderId}:`, msg);
     throw error;
   }
@@ -100,3 +96,33 @@ export async function getPeakTimeStats() {
   const res = await apiClient.get(`${API_URL}/order/peak-time`);
   return res.data;
 }
+
+export const updateOrderStatus = async (orderId, status) => {
+  try {
+    const res = await apiClient.put(`${API_URL}/order/${orderId}/status`, { status });
+    return res.data;
+  } catch (error) {
+    console.error(`Failed to update status for order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+export const fetchRefundRequests = async () => {
+  try {
+    const res = await apiClient.get(`${API_URL}/order/refund-requests`);
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch refund requests:", error);
+    throw error;
+  }
+};
+
+export const confirmRefund = async (refundId) => {
+  try {
+    const res = await apiClient.put(`${API_URL}/order/refund-requests/${refundId}/confirm`);
+    return res.data;
+  } catch (error) {
+    console.error(`Failed to confirm refund ${refundId}:`, error);
+    throw error;
+  }
+};
