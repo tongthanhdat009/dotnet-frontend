@@ -119,6 +119,7 @@
           <td>
             <button @click.stop="editPromotion(p)">✏️</button>
             <button @click.stop="confirmAction('delete', p)">🗑️</button>
+            <button @click.stop="openGiftModal(p.PromoId)" title="Tặng Voucher">🎁</button>
           </td>
         </tr>
         <tr v-if="filteredPromotions.length === 0">
@@ -126,6 +127,61 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- 🎁 Modal Tặng Voucher -->
+    <div v-if="showGiftModal" class="confirm-overlay">
+      <div class="confirm-box gift-modal">
+        <div v-if="sendingGift" class="loading-overlay">
+          <div class="spinner"></div>
+          <p>Đang gửi email tặng quà...</p>
+        </div>
+        
+        <div class="modal-header-actions">
+          <h3>🎁 Tặng Voucher</h3>
+          <div class="promo-info" v-if="currentGiftPromo">
+             <span class="badge-code">{{ currentGiftPromo.PromoCode }}</span>
+             <span class="badge-limit">Còn lại: {{ getRemainingCount(currentGiftPromo) }}</span>
+          </div>
+        </div>
+
+        <div class="gift-search">
+          <input v-model="customerSearch" type="text" placeholder="🔍 Tìm khách hàng (Tên, SĐT, Email)..." />
+        </div>
+        <div class="customer-list">
+          <div v-if="loadingCustomers" class="loading-text">Đang tải danh sách khách hàng...</div>
+          <table v-else>
+            <thead>
+              <tr>
+                <th class="col-checkbox">
+                    <input type="checkbox" :checked="isAllAutoSelected" @change="toggleSelectAllAuto" title="Chọn tự động theo số lượng còn lại" />
+                </th>
+                <th>Tên khách hàng</th>
+                <th>Email</th>
+                <th>SĐT</th>
+                <th class="text-right">Chi tiêu</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="c in filteredCustomers" :key="c.CustomerId" :class="{ selected: selectedCustomerIds.includes(c.CustomerId) }">
+                <td class="col-checkbox">
+                  <input type="checkbox" :checked="selectedCustomerIds.includes(c.CustomerId)" @change="toggleCustomerSelection(c.CustomerId)" />
+                </td>
+                <td><strong>{{ c.Name }}</strong></td>
+                <td>{{ c.Email || '-' }}</td>
+                <td>{{ c.Phone }}</td>
+                <td class="text-right highlight-spending">{{ formatCurrency(c.TotalSpending) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button class="btn-yes" @click="sendGiftVoucher" :disabled="sendingGift">
+            {{ sendingGift ? 'Đang gửi...' : `Gửi tặng (${selectedCustomerIds.length})` }}
+          </button>
+          <button class="btn-no" @click="showGiftModal = false" :disabled="sendingGift">Đóng</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 🧩 Popup xác nhận -->
     <div v-if="showPopup" class="confirm-overlay">
@@ -146,6 +202,7 @@ import { ref, computed, onMounted } from "vue";
 import Flatpickr from "vue-flatpickr-component";
 import "flatpickr/dist/flatpickr.css";
 import * as PromotionApi from "../api/Promotion";
+import { getCustomersBySpending } from "../api/Customer.js";
 
 const promotions = ref([]);
 
@@ -154,6 +211,111 @@ const editMode = ref(false);
 const viewMode = ref(false);
 const searchText = ref("");
 const filterType = ref("PromoId");
+
+// Gift Voucher Modal
+const showGiftModal = ref(false);
+const giftPromoId = ref(null);
+const customers = ref([]);
+const customerSearch = ref("");
+const selectedCustomerIds = ref([]);
+const loadingCustomers = ref(false);
+const sendingGift = ref(false);
+
+const filteredCustomers = computed(() => {
+  if (!customerSearch.value) return customers.value;
+  const kw = customerSearch.value.toLowerCase();
+  return customers.value.filter(c => 
+    c.Name.toLowerCase().includes(kw) || 
+    (c.Phone && c.Phone.includes(kw)) ||
+    (c.Email && c.Email.toLowerCase().includes(kw))
+  );
+});
+
+const currentGiftPromo = computed(() => promotions.value.find(p => p.PromoId === giftPromoId.value));
+
+function openGiftModal(promoId) {
+  giftPromoId.value = promoId;
+  showGiftModal.value = true;
+  selectedCustomerIds.value = [];
+  loadCustomersBySpending();
+}
+
+async function loadCustomersBySpending() {
+  loadingCustomers.value = true;
+  try {
+    customers.value = await getCustomersBySpending();
+  } catch (e) {
+    console.error(e);
+    alert("Không thể tải danh sách khách hàng.");
+  } finally {
+    loadingCustomers.value = false;
+  }
+}
+
+function toggleCustomerSelection(id) {
+  const idx = selectedCustomerIds.value.indexOf(id);
+  if (idx > -1) selectedCustomerIds.value.splice(idx, 1);
+  else selectedCustomerIds.value.push(id);
+}
+
+function getRemainingCount(p) {
+  if (!p.UsageLimit) return '∞';
+  return Math.max(0, p.UsageLimit - (p.UsedCount || 0));
+}
+
+const isAllAutoSelected = computed(() => {
+    if (!currentGiftPromo.value || filteredCustomers.value.length === 0) return false;
+    const limit = currentGiftPromo.value.UsageLimit ? Math.max(0, currentGiftPromo.value.UsageLimit - (currentGiftPromo.value.UsedCount || 0)) : Infinity;
+    const expectedCount = Math.min(limit, filteredCustomers.value.length);
+    // If we have selected at least the expected count (or all if unlimited), show checked
+    return selectedCustomerIds.value.length > 0 && selectedCustomerIds.value.length >= expectedCount;
+});
+
+function toggleSelectAllAuto(e) {
+  const checked = e.target.checked;
+  if (!checked) {
+    selectedCustomerIds.value = [];
+  } else {
+    if (!currentGiftPromo.value) return;
+    const p = currentGiftPromo.value;
+    const limit = p.UsageLimit ? Math.max(0, p.UsageLimit - (p.UsedCount || 0)) : Infinity;
+    
+    if (limit === 0) {
+      alert("Mã khuyến mãi này đã hết lượt sử dụng.");
+      e.target.checked = false;
+      return;
+    }
+    
+    // Select top 'limit' customers from the filtered list
+    const countToSelect = Math.min(limit, filteredCustomers.value.length);
+    selectedCustomerIds.value = filteredCustomers.value.slice(0, countToSelect).map(c => c.CustomerId);
+  }
+}
+
+async function sendGiftVoucher() {
+  if (selectedCustomerIds.value.length === 0) {
+    alert("Vui lòng chọn ít nhất một khách hàng.");
+    return;
+  }
+  sendingGift.value = true;
+  try {
+    await PromotionApi.giftVoucher({
+      CustomerIds: selectedCustomerIds.value,
+      PromoId: giftPromoId.value
+    });
+    alert("Đã gửi mã khuyến mãi thành công!");
+    showGiftModal.value = false;
+  } catch (e) {
+    const msg = e?.response?.data?.message || e.message || "Lỗi khi gửi mã.";
+    alert(msg);
+  } finally {
+    sendingGift.value = false;
+  }
+}
+
+function formatCurrency(val) {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
+}
 
 const showPopup = ref(false);
 const popupAction = ref("");
@@ -336,5 +498,143 @@ async function doDelete(target) {
   grid-column: span 2;
   display: flex;
   gap: 10px;
+}
+
+.gift-modal {
+  width: 900px;
+  max-width: 95%;
+}
+
+.gift-search {
+  margin-bottom: 10px;
+}
+
+.gift-search input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.customer-list {
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  margin-bottom: 15px;
+}
+
+.customer-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.customer-list th, .customer-list td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.customer-list th {
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.modal-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.promo-info {
+  display: flex;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.badge-code {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  border: 1px solid #c8e6c9;
+}
+
+.badge-limit {
+  background: #fff3e0;
+  color: #ef6c00;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  border: 1px solid #ffe0b2;
+}
+
+.col-checkbox {
+  width: 40px;
+  text-align: center !important;
+}
+
+.col-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.highlight-spending {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.customer-list tr.selected {
+  background-color: #e3f2fd;
+}
+
+.customer-name {
+  font-weight: 500;
+  color: #1976d2;
+}
+
+.loading-text {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
 }
 </style>

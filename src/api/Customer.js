@@ -40,3 +40,8 @@ export async function getTopCustomers() {
   const res = await apiClient.get(`${CUSTOMER_API_URL}/top-buyers`);
   return res.data;
 }
+
+export async function getCustomersBySpending() {
+  const res = await apiClient.get(`${CUSTOMER_API_URL}/spending`);
+  return res.data;
+}

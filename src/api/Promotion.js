@@ -32,6 +32,11 @@ export async function applyPromotion(promoCode, totalAmount) {
   return res.data;
 }
 
+export async function giftVoucher(payload) {
+  const res = await apiClient.post(`${BASE}/gift`, payload);
+  return res.data;
+}
+
 export default {
   getPromotions,
   getPromotion,
@@ -39,4 +44,5 @@ export default {
   updatePromotion,
   deletePromotion,
   applyPromotion,
+  giftVoucher,
 };
