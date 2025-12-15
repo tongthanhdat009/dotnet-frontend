@@ -1,37 +1,215 @@
 <template>
   <div class="dashboard-page">
-    <h2>📊 Dashboard</h2>
+    <div class="dashboard-header">
+      <h2>📊 Dashboard</h2>
+      <p class="subtitle">Thống kê doanh thu & đơn hàng</p>
+    </div>
     
-    <div class="cards">
-      <div class="card">
-        <div class="title">
-          <span>Tổng users</span>
-          <User style="color: #FFA500"/>
+    <!-- Summary Cards -->
+    <div class="stats-grid">
+      <div class="stat-card users">
+        <div class="stat-icon">
+          <User />
         </div>
-        <p>{{ totalUsers }}</p>
+        <div class="stat-info">
+          <span class="stat-label">Tổng Users</span>
+          <p class="stat-value">{{ totalUsers }}</p>
+        </div>
       </div>
-      <div class="card">
-        <div class="title">
-          <span>Tổng đơn hàng</span>
-          <ReceiptText style="color: #FFA500"/>
+      
+      <div class="stat-card products">
+        <div class="stat-icon">
+          <Package />
         </div>
-        <p>{{ totalOrders }}</p>
+        <div class="stat-info">
+          <span class="stat-label">Sản phẩm</span>
+          <p class="stat-value">{{ totalProducts }}</p>
+        </div>
       </div>
-      <div class="card">
-        <div class="title">
-          <span>Tổng sản phẩm</span>
-          <Package style="color: #FFA500"/>
+      
+      <div class="stat-card categories">
+        <div class="stat-icon">
+          <ChartBarStacked />
         </div>
-        <p>{{ totalProducts }}</p>
+        <div class="stat-info">
+          <span class="stat-label">Loại SP</span>
+          <p class="stat-value">{{ totalCategories }}</p>
+        </div>
       </div>
-      <div class="card">
-        <div class="title">
-          <span>Tổng loại sản phẩm</span>
-          <ChartBarStacked style="color: #FFA500"/>
+      
+      <div class="stat-card revenue">
+        <div class="stat-icon">
+          <Wallet />
         </div>
-        <p>{{ totalCategories }}</p>
+        <div class="stat-info">
+          <span class="stat-label">Tổng doanh thu</span>
+          <p class="stat-value small">{{ formatPrice(dashboardStats.TotalRevenue) }}</p>
+        </div>
       </div>
     </div>
+
+    <!-- Orders Overview Cards -->
+    <div class="orders-overview">
+      <h3 class="section-title">📦 Tổng quan đơn hàng (Hoàn thành & Đã thanh toán)</h3>
+      <div class="orders-cards">
+        <div class="order-card total">
+          <div class="order-card-header">
+            <ReceiptText />
+            <span>Tất cả đơn</span>
+          </div>
+          <div class="order-card-body">
+            <div class="order-stat">
+              <span class="order-count">{{ dashboardStats.CompletedOrders }}</span>
+              <span class="order-label">đơn hoàn thành</span>
+            </div>
+            <div class="order-revenue">
+              <span>{{ formatPrice(dashboardStats.TotalRevenue) }} VND</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="order-card online">
+          <div class="order-card-header">
+            <Globe />
+            <span>Đơn Online</span>
+          </div>
+          <div class="order-card-body">
+            <div class="order-stat">
+              <span class="order-count">{{ dashboardStats.CompletedOnlineOrders }}</span>
+              <span class="order-label">đơn hoàn thành</span>
+            </div>
+            <div class="order-revenue">
+              <span>{{ formatPrice(dashboardStats.OnlineRevenue) }} VND</span>
+            </div>
+          </div>
+          <div class="order-card-footer">
+            <div class="progress-bar">
+              <div class="progress" :style="{ width: onlinePercentage + '%' }"></div>
+            </div>
+            <span class="percentage">{{ onlinePercentage.toFixed(1) }}%</span>
+          </div>
+        </div>
+        
+        <div class="order-card offline">
+          <div class="order-card-header">
+            <Store />
+            <span>Đơn Offline</span>
+          </div>
+          <div class="order-card-body">
+            <div class="order-stat">
+              <span class="order-count">{{ dashboardStats.CompletedOfflineOrders }}</span>
+              <span class="order-label">đơn hoàn thành</span>
+            </div>
+            <div class="order-revenue">
+              <span>{{ formatPrice(dashboardStats.OfflineRevenue) }} VND</span>
+            </div>
+          </div>
+          <div class="order-card-footer">
+            <div class="progress-bar offline">
+              <div class="progress" :style="{ width: offlinePercentage + '%' }"></div>
+            </div>
+            <span class="percentage">{{ offlinePercentage.toFixed(1) }}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Order Statistics Table -->
+    <div class="daily-stats-section">
+      <div class="daily-stats-header">
+        <h3>📅 Thống kê đơn hàng theo ngày</h3>
+        <div class="daily-stats-controls">
+          <select v-model="dailyStatsYear" @change="fetchDailyStats">
+            <option v-for="y in years" :key="y" :value="y">Năm {{ y }}</option>
+          </select>
+          <select v-model="dailyStatsMonth" @change="fetchDailyStats">
+            <option v-for="(m, index) in monthsSelect" :key="index" :value="index + 1">{{ m }}</option>
+          </select>
+          <button class="export-btn" @click="exportDailyStatsPDF" :disabled="dailyStats.length === 0">
+            <FileDown style="width: 16px; height: 16px;" />
+            Xuất PDF
+          </button>
+        </div>
+      </div>
+      
+      <div class="daily-stats-summary" v-if="dailyStats.length > 0">
+        <div class="summary-card">
+          <div class="summary-icon total">
+            <CalendarDays />
+          </div>
+          <div class="summary-content">
+            <span class="summary-label">Tổng đơn</span>
+            <strong>{{ totalDailyOrders }}</strong>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon revenue">
+            <Banknote />
+          </div>
+          <div class="summary-content">
+            <span class="summary-label">Doanh thu</span>
+            <strong>{{ formatPrice(totalDailyAmount) }}</strong>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon online">
+            <Globe />
+          </div>
+          <div class="summary-content">
+            <span class="summary-label">Online</span>
+            <strong>{{ totalOnlineOrders }} ({{ formatPrice(totalOnlineAmount) }})</strong>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon offline">
+            <Store />
+          </div>
+          <div class="summary-content">
+            <span class="summary-label">Offline</span>
+            <strong>{{ totalOfflineOrders }} ({{ formatPrice(totalOfflineAmount) }})</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="daily-stats-table-wrapper">
+        <table class="daily-stats-table" v-if="dailyStats.length > 0">
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Tổng đơn</th>
+              <th>Online</th>
+              <th>Offline</th>
+              <th>Tổng giá trị</th>
+              <th>KH mua nhiều nhất</th>
+              <th>Giá trị KH</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(stat, index) in dailyStats" :key="index">
+              <td class="date-cell">{{ formatDate(stat.Date) }}</td>
+              <td class="center">
+                <span class="badge total">{{ stat.TotalOrders }}</span>
+              </td>
+              <td class="center">
+                <span class="badge online">{{ stat.OnlineOrders }}</span>
+              </td>
+              <td class="center">
+                <span class="badge offline">{{ stat.OfflineOrders }}</span>
+              </td>
+              <td class="right amount">{{ formatPrice(stat.TotalAmount) }} ₫</td>
+              <td>{{ stat.TopCustomerName }}</td>
+              <td class="right">{{ formatPrice(stat.TopCustomerAmount) }} ₫</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="no-data">
+          <CalendarX2 style="width: 48px; height: 48px; color: #ccc;" />
+          <p>Không có dữ liệu cho tháng {{ dailyStatsMonth }}/{{ dailyStatsYear }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
     <div class="search-bar">
       <label for="year">Xem biểu đồ năm:</label>
       <select v-model="time" id="year">
@@ -39,68 +217,64 @@
       </select>
     </div>
     <div class="charts">
-      <div class="salesChart">
-        <div style="display: flex">
-          <h3>Tổng doanh thu năm {{ time }}: </h3>
-          <h3 style="color: #FCA300; margin-left: 10px">{{ formatPrice(totalSalesInYear) }} VND</h3>
+      <div class="chart-container salesChart">
+        <div class="chart-header">
+          <h3>💰 Doanh thu năm {{ time }}</h3>
+          <span class="chart-total">{{ formatPrice(totalSalesInYear) }} VND</span>
         </div>
         <canvas ref="salesChart"></canvas>
       </div>
-      <div class="ordersChart">
-        <div style="display: flex">
-          <h3>Tổng đơn hàng năm {{ time }}: </h3>
-          <h3 style="color: #FCA300; margin-left: 10px">{{ formatPrice(totalOrdersInYear) }} Đơn</h3>
+      <div class="chart-container ordersChart">
+        <div class="chart-header">
+          <h3>📦 Đơn hàng năm {{ time }}</h3>
+          <span class="chart-total">{{ formatPrice(totalOrdersInYear) }} đơn</span>
         </div>
         <canvas ref="ordersChart"></canvas>
       </div>
     </div>
 
-    <div class="cards mt-50">
-      <div class="card">
-        <div class="title">
+    <!-- Bottom Cards -->
+    <div class="bottom-cards">
+      <div class="info-card popular">
+        <div class="info-card-header">
+          <TrendingUp />
           <span>Sản phẩm phổ biến</span>
-          <TrendingUp style="color: #FFA500"/>
         </div>
-        <div class="cardRanks">
-          <div 
-            v-for="(product, index) in popularProducts" 
-            :key="index" 
-            class="rank"
-          >
-            <span>{{product.ProductName}}</span>
-            <span class="totalOrders">{{product.TotalOrders}} đơn</span>
+        <div class="info-card-body">
+          <div v-for="(product, index) in popularProducts" :key="index" class="rank-item">
+            <span class="rank-number">{{ index + 1 }}</span>
+            <span class="rank-name">{{ product.ProductName }}</span>
+            <span class="rank-value">{{ product.TotalOrders }} đơn</span>
           </div>
         </div>
       </div>
-      <div class="card">
-        <div class="title">
+      
+      <div class="info-card customers">
+        <div class="info-card-header">
+          <ChartNoAxesCombined />
           <span>Top khách hàng</span>
-          <ChartNoAxesCombined style="color: #FFA500"/>
         </div>
-        <div class="cardRanks">
-          <div 
-            v-for="(user, index) in topUsers" 
-            :key="index" 
-            class="rank"
-          >
-            <span>{{user.Name}}</span>
-            <span class="totalOrders">{{user.TotalOrders}} đơn</span>
+        <div class="info-card-body">
+          <div v-for="(user, index) in topUsers" :key="index" class="rank-item">
+            <span class="rank-number">{{ index + 1 }}</span>
+            <span class="rank-name">{{ user.Name }}</span>
+            <span class="rank-value">{{ user.TotalOrders }} đơn</span>
           </div>
         </div>
       </div>
-      <div class="card">
-        <div class="title">
+      
+      <div class="info-card peak-time">
+        <div class="info-card-header">
+          <Clock4 />
           <span>Thời gian cao điểm</span>
-          <Clock4 style="color: #FFA500"/>
         </div>
-        <div class="cardRanks">
-          <div 
-            v-for="(time, index) in peakTime" 
-            :key="index" 
-            class="rank"
-          >
-            <span>{{ time.TimeRange }}</span>
-            <span class="totalOrders">{{ time.Percentage }}% đơn</span>
+        <div class="info-card-body">
+          <div v-for="(t, index) in peakTime" :key="index" class="time-item">
+            <span class="time-range">{{ t.TimeRange }}</span>
+            <div class="time-bar-container">
+              <div class="time-bar" :style="{ width: t.Percentage + '%' }"></div>
+            </div>
+            <span class="time-percentage">{{ t.Percentage }}%</span>
           </div>
         </div>
       </div>
@@ -112,10 +286,14 @@
 import { getTotalProducts, getTopProducts } from "../api/Product.js";
 import { getTotalUsers } from "../api/Users.js";
 import { getTotalCategories } from "../api/Category.js";
-import { getTotalOrders, getOrdersByYear, getSalesByYear, getPeakTimeStats } from "../api/Order.js";
+import { getTotalOrders, getCompletedOrdersByYear, getCompletedSalesByYear, getPeakTimeStats, getDailyOrderStats, getDashboardStats } from "../api/Order.js";
 import { getTopCustomers } from "../api/Customer.js";
 import { ref, onMounted, computed, watch } from "vue";
 import Chart from "chart.js/auto";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { robotoRegularBase64 } from "../utils/robotoRegularBase64";
+import { FileDown, Globe, Store, CalendarDays, Banknote, CalendarX2, Wallet } from "lucide-vue-next";
 
 // ----- data
 const totalUsers = ref(0);
@@ -128,6 +306,22 @@ const totalOrdersInYear = ref(0);
 const topUsers = ref([]);
 const peakTime = ref([]);
 const time = ref(new Date().getFullYear());
+const dashboardStats = ref({
+  TotalOrders: 0,
+  TotalOnlineOrders: 0,
+  TotalOfflineOrders: 0,
+  CompletedOrders: 0,
+  CompletedOnlineOrders: 0,
+  CompletedOfflineOrders: 0,
+  TotalRevenue: 0,
+  OnlineRevenue: 0,
+  OfflineRevenue: 0
+});
+
+// Daily stats data
+const dailyStats = ref([]);
+const dailyStatsYear = ref(new Date().getFullYear());
+const dailyStatsMonth = ref(new Date().getMonth() + 1);
 
 // ----- Danh sách tháng & năm
 const startYear = 2020;
@@ -137,25 +331,54 @@ const years = computed(() =>
 );
 
 const months = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+const monthsSelect = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+
+// Computed for daily stats summary
+const totalDailyOrders = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.TotalOrders, 0);
+});
+
+const totalDailyAmount = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.TotalAmount, 0);
+});
+
+const totalOnlineOrders = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.OnlineOrders, 0);
+});
+
+const totalOnlineAmount = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.OnlineAmount, 0);
+});
+
+const totalOfflineOrders = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.OfflineOrders, 0);
+});
+
+const totalOfflineAmount = computed(() => {
+  return dailyStats.value.reduce((sum, stat) => sum + stat.OfflineAmount, 0);
+});
+
+// Percentage calculations
+const onlinePercentage = computed(() => {
+  const total = dashboardStats.value.CompletedOrders;
+  if (total === 0) return 0;
+  return (dashboardStats.value.CompletedOnlineOrders / total) * 100;
+});
+
+const offlinePercentage = computed(() => {
+  const total = dashboardStats.value.CompletedOrders;
+  if (total === 0) return 0;
+  return (dashboardStats.value.CompletedOfflineOrders / total) * 100;
+});
 
 // ----- watch()
 watch(
   () => time.value,
   async (newVal, oldVal) => {
     await fetchOrdersByYear();
-    
-  }
-);
-
-watch(
-  () => time.value,
-  async (newVal, oldVal) => {
     await fetchSalesByYear();
-    
   }
 );
-
-
 
 const salesChart = ref(null);
 const ordersChart = ref(null);
@@ -163,9 +386,28 @@ let salesChartInstance = null;
 let ordersChartInstance = null;
 
 // ----- Fetch data
+async function fetchDashboardStats() {
+  try {
+    const data = await getDashboardStats();
+    dashboardStats.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải dashboard stats:", err);
+  }
+}
+
+async function fetchDailyStats() {
+  try {
+    const data = await getDailyOrderStats(dailyStatsYear.value, dailyStatsMonth.value);
+    dailyStats.value = data;
+  } catch (err) {
+    console.error("Lỗi khi tải thống kê theo ngày:", err);
+    dailyStats.value = [];
+  }
+}
+
 async function fetchOrdersByYear() {
   try {
-    const data = await getOrdersByYear(time.value);
+    const data = await getCompletedOrdersByYear(time.value);
     const orderCounts = data.map(item => item.TotalOrders);
     const totalOrdersByYear = orderCounts.reduce((sum, val) => sum + val, 0);
     totalOrdersInYear.value = totalOrdersByYear;
@@ -184,8 +426,7 @@ function updateOrdersChart(orderCounts) {
 
 async function fetchSalesByYear() {
   try {
-    const data = await getSalesByYear(time.value);
-
+    const data = await getCompletedSalesByYear(time.value);
     const salesAmounts = data.map(item => item.TotalSales);
     const totalSalesByYear = salesAmounts.reduce((sum, val) => sum + val, 0);
     totalSalesInYear.value = totalSalesByYear;
@@ -268,11 +509,119 @@ async function fetchPeakTimeStats() {
 
 // ----- Helpers
 
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN', { 
+    weekday: 'short', 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+}
 
 function formatPrice(val) {
   return Number(val || 0).toLocaleString("vi-VN");
 }
 
+// ----- PDF Export
+function exportDailyStatsPDF() {
+  if (dailyStats.value.length === 0) return;
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+
+  // Colors
+  const primaryColor = [52, 73, 94];
+  const accentColor = [41, 128, 185];
+  const grayColor = [127, 140, 141];
+
+  // Add font
+  doc.addFileToVFS("Roboto-Regular.ttf", robotoRegularBase64);
+  doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+  doc.addFont("Roboto-Regular.ttf", "Roboto", "bold");
+  doc.setFont("Roboto");
+
+  let y = 20;
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(...primaryColor);
+  doc.text("BÁO CÁO THỐNG KÊ ĐƠN HÀNG THEO NGÀY", pageWidth / 2, y, { align: "center" });
+
+  y += 10;
+  doc.setFontSize(12);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...accentColor);
+  doc.text(`Tháng ${dailyStatsMonth.value}/${dailyStatsYear.value}`, pageWidth / 2, y, { align: "center" });
+
+  y += 12;
+  doc.setFontSize(9);
+  doc.setTextColor(...grayColor);
+  doc.text("(Chỉ bao gồm đơn hàng hoàn thành & đã thanh toán)", pageWidth / 2, y, { align: "center" });
+
+  y += 12;
+
+  // Summary
+  doc.setFontSize(10);
+  doc.setTextColor(...primaryColor);
+  doc.text(`Tổng đơn: ${totalDailyOrders.value}`, margin, y);
+  doc.text(`Online: ${totalOnlineOrders.value}`, margin + 50, y);
+  doc.text(`Offline: ${totalOfflineOrders.value}`, margin + 90, y);
+  
+  y += 6;
+  doc.text(`Tổng doanh thu: ${formatPrice(totalDailyAmount.value)} VND`, margin, y);
+
+  y += 10;
+
+  // Table
+  const tableData = dailyStats.value.map(stat => [
+    formatDate(stat.Date),
+    stat.TotalOrders.toString(),
+    stat.OnlineOrders.toString(),
+    stat.OfflineOrders.toString(),
+    formatPrice(stat.TotalAmount) + " VND",
+    stat.TopCustomerName || "Khách lẻ",
+    formatPrice(stat.TopCustomerAmount) + " VND"
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Ngày", "Tổng", "Online", "Offline", "Giá trị", "KH nhiều nhất", "Giá trị KH"]],
+    body: tableData,
+    theme: 'striped',
+    styles: {
+      font: "Roboto",
+      fontSize: 7,
+      cellPadding: 2,
+    },
+    headStyles: {
+      fillColor: [39, 174, 96],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      1: { halign: 'center', cellWidth: 14 },
+      2: { halign: 'center', cellWidth: 14 },
+      3: { halign: 'center', cellWidth: 14 },
+      4: { halign: 'right', cellWidth: 28 },
+      5: { cellWidth: 32 },
+      6: { halign: 'right', cellWidth: 28 }
+    },
+    margin: { left: margin, right: margin }
+  });
+
+  // Footer
+  const finalY = doc.lastAutoTable.finalY + 15;
+  doc.setFontSize(8);
+  doc.setTextColor(...grayColor);
+  doc.text(`Ngày xuất báo cáo: ${new Date().toLocaleString('vi-VN')}`, margin, finalY);
+
+  // Open PDF
+  window.open(doc.output("bloburl"), "_blank");
+}
 
 // ----- onMounted()
 
@@ -282,11 +631,30 @@ onMounted(async () => {
     data: {
       labels: months,
       datasets: [{
-        label: "Doanh thu",
+        label: "Doanh thu (đã thanh toán)",
         data: Array(12).fill(0),
-        backgroundColor: "rgba(39, 174, 96, 0.7)"
+        backgroundColor: "rgba(39, 174, 96, 0.8)",
+        borderColor: "rgba(39, 174, 96, 1)",
+        borderWidth: 1,
+        borderRadius: 4
       }],
     },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return value.toLocaleString('vi-VN');
+            }
+          }
+        }
+      }
+    }
   });
 
   ordersChartInstance = new Chart(ordersChart.value, {
@@ -294,11 +662,25 @@ onMounted(async () => {
     data: {
       labels: months,
       datasets: [{
-        label: "Đơn hàng",
+        label: "Đơn hoàn thành",
         data: new Array(12).fill(0),
-        backgroundColor: "rgba(39, 174, 96, 0.7)",
+        backgroundColor: "rgba(52, 152, 219, 0.8)",
+        borderColor: "rgba(52, 152, 219, 1)",
+        borderWidth: 1,
+        borderRadius: 4
       }],
     },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
   });
   
   await Promise.all([
@@ -310,81 +692,592 @@ onMounted(async () => {
     fetchTotalOrders(),
     fetchSalesByYear(),
     fetchOrdersByYear(),
-    fetchPeakTimeStats()
+    fetchPeakTimeStats(),
+    fetchDailyStats(),
+    fetchDashboardStats()
   ]);
-
-  
 });
 
 </script>
 
 <style scoped>
-.mt-50 {
-  margin-top: 50px;
+/* Base Styles */
+.dashboard-page { 
+  padding: 24px; 
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  min-height: 100vh;
 }
 
-p {
+.dashboard-header {
+  margin-bottom: 24px;
+}
+
+.dashboard-header h2 {
+  font-size: 28px;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.dashboard-header .subtitle {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon svg {
+  width: 28px;
+  height: 28px;
+  color: white;
+}
+
+.stat-card.users .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.stat-card.products .stat-icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.stat-card.categories .stat-icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.stat-card.revenue .stat-icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #95a5a6;
+  display: block;
+}
+
+.stat-value {
+  font-size: 28px;
   font-weight: 700;
-  font-size: 24px;
+  color: #2c3e50;
+  margin: 4px 0 0;
 }
 
-.title {
+.stat-value.small {
+  font-size: 18px;
+}
+
+/* Orders Overview */
+.orders-overview {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.section-title {
+  font-size: 18px;
+  color: #2c3e50;
+  margin: 0 0 20px;
+}
+
+.orders-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.order-card {
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.order-card.total {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.order-card.online {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+}
+
+.order-card.offline {
+  background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+  color: white;
+}
+
+.order-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.order-card-header svg {
+  width: 24px;
+  height: 24px;
+}
+
+.order-card-body {
+  margin-bottom: 12px;
+}
+
+.order-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.order-count {
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.order-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.order-revenue {
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.order-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar .progress {
+  height: 100%;
+  background: white;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.percentage {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Daily Stats Section */
+.daily-stats-section {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  margin-bottom: 24px;
+}
+
+.daily-stats-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
-.dashboard-page { 
-  padding: 20px; 
-  background: white; 
-  border-radius: 10px; 
+.daily-stats-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 18px;
 }
 
-.cards { 
-  display: flex; 
-  gap: 20px; 
-  margin-bottom: 50px; 
+.daily-stats-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.card { 
-  flex: 1; 
-  padding: 15px; 
-  background: #27ae60; 
-  color: white; 
-  border-radius: 10px; 
-  text-align: center; 
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
+.daily-stats-controls select {
+  padding: 10px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  background: white;
+  transition: border-color 0.3s;
+}
 
+.daily-stats-controls select:focus {
+  outline: none;
+  border-color: #27ae60;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.export-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.export-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+/* Summary Cards */
+.daily-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.summary-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-icon svg {
+  width: 22px;
+  height: 22px;
+  color: white;
+}
+
+.summary-icon.total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.summary-icon.revenue { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+.summary-icon.online { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.summary-icon.offline { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+
+.summary-content {
+  flex: 1;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #95a5a6;
+  display: block;
+}
+
+.summary-content strong {
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+/* Table */
+.daily-stats-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.daily-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.daily-stats-table th,
+.daily-stats-table td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.daily-stats-table th {
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.daily-stats-table tbody tr {
+  transition: background 0.2s;
+}
+
+.daily-stats-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.daily-stats-table .date-cell {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.total { background: #e8f4fd; color: #3498db; }
+.badge.online { background: #e8f8f5; color: #27ae60; }
+.badge.offline { background: #fdedec; color: #e74c3c; }
+
+.daily-stats-table .center { text-align: center; }
+.daily-stats-table .right { text-align: right; }
+.daily-stats-table .amount { font-weight: 600; color: #27ae60; }
+
+.no-data {
+  text-align: center;
+  padding: 60px 20px;
+  color: #95a5a6;
+}
+
+.no-data p {
+  font-size: 16px;
+  font-weight: normal;
+  margin-top: 12px;
+}
+
+/* Charts Section */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.search-bar label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.search-bar select {
+  padding: 10px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  background: white;
 }
 
 .charts { 
   background: white; 
-  padding: 20px; 
-  border-radius: 10px; 
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1); 
+  padding: 24px; 
+  border-radius: 16px; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
   display: flex;
   flex-direction: column;
+  gap: 30px;
+  margin-bottom: 24px;
+}
+
+.chart-container {
+  padding-bottom: 20px;
+}
+
+.chart-container.salesChart {
+  border-bottom: 1px solid #eee;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chart-header h3 {
+  font-size: 16px;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.chart-total {
+  font-size: 20px;
+  font-weight: 700;
+  color: #27ae60;
+}
+
+/* Bottom Cards */
+.bottom-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
-.charts .salesChart {
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 50px;
+.info-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
 }
 
-.cardRanks {
-  margin-top: 10px;
-  font-size: 16px;
+.info-card-header {
+  padding: 16px 20px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  color: white;
 }
 
-.cardRanks .rank {
+.info-card-header svg {
+  width: 20px;
+  height: 20px;
+}
+
+.info-card.popular .info-card-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.info-card.customers .info-card-header { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.info-card.peak-time .info-card-header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+
+.info-card-body {
+  padding: 16px 20px;
+}
+
+.rank-item {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.cardRanks .rank .totalOrders{
-  color: #FCA300;
+.rank-item:last-child {
+  border-bottom: none;
+}
+
+.rank-number {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rank-name {
+  flex: 1;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.rank-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #27ae60;
+}
+
+.time-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.time-item:last-child {
+  border-bottom: none;
+}
+
+.time-range {
+  width: 100px;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.time-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.time-bar {
+  height: 100%;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.time-percentage {
+  width: 50px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e74c3c;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .orders-cards { grid-template-columns: 1fr; }
+  .daily-stats-summary { grid-template-columns: repeat(2, 1fr); }
+  .bottom-cards { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .daily-stats-summary { grid-template-columns: 1fr; }
+  .daily-stats-header { flex-direction: column; align-items: flex-start; }
 }
 </style>

@@ -66,7 +66,8 @@ export const cancelOrder = async (orderId) => {
     const res = await apiClient.put(`${API_URL}/Order/${orderId}/cancel-admin`);
     return res.data;
   } catch (error) {
-    const msg = error?.response?.data?.message || error?.message || "Cancel order failed";
+    const msg =
+      error?.response?.data?.message || error?.message || "Cancel order failed";
     console.error(`Failed to cancel order ${orderId}:`, msg);
     throw error;
   }
@@ -92,14 +93,42 @@ export async function getSalesByYear(year) {
   return res.data;
 }
 
+export async function getCompletedOrdersByYear(year) {
+  const res = await apiClient.get(
+    `${API_URL}/order/completed-orders-by-year/${year}`
+  );
+  return res.data;
+}
+
+export async function getCompletedSalesByYear(year) {
+  const res = await apiClient.get(
+    `${API_URL}/order/completed-sales-by-year/${year}`
+  );
+  return res.data;
+}
+
+export async function getDashboardStats() {
+  const res = await apiClient.get(`${API_URL}/order/dashboard-stats`);
+  return res.data;
+}
+
 export async function getPeakTimeStats() {
   const res = await apiClient.get(`${API_URL}/order/peak-time`);
   return res.data;
 }
 
+export async function getDailyOrderStats(year, month) {
+  const res = await apiClient.get(
+    `${API_URL}/order/daily-stats/${year}/${month}`
+  );
+  return res.data;
+}
+
 export const updateOrderStatus = async (orderId, status) => {
   try {
-    const res = await apiClient.put(`${API_URL}/order/${orderId}/status`, { status });
+    const res = await apiClient.put(`${API_URL}/order/${orderId}/status`, {
+      status,
+    });
     return res.data;
   } catch (error) {
     console.error(`Failed to update status for order ${orderId}:`, error);
@@ -119,7 +148,9 @@ export const fetchRefundRequests = async () => {
 
 export const confirmRefund = async (refundId) => {
   try {
-    const res = await apiClient.put(`${API_URL}/order/refund-requests/${refundId}/confirm`);
+    const res = await apiClient.put(
+      `${API_URL}/order/refund-requests/${refundId}/confirm`
+    );
     return res.data;
   } catch (error) {
     console.error(`Failed to confirm refund ${refundId}:`, error);
