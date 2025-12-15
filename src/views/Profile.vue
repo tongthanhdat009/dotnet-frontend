@@ -16,11 +16,11 @@
       <div class="profile-card">
         <div class="profile-header">
           <div class="avatar">
-            {{ userInfo.username?.charAt(0).toUpperCase() || '?' }}
+            {{ userInfo.Username?.charAt(0).toUpperCase() || '?' }}
           </div>
-          <h3>{{ userInfo.fullName || userInfo.username }}</h3>
-          <span class="badge" :class="getRoleBadgeClass(userInfo.role)">
-            {{ getRoleText(userInfo.role) }}
+          <h3>{{ userInfo.FullName || userInfo.Username }}</h3>
+          <span class="badge" :class="getRoleBadgeClass(userInfo.Role)">
+            {{ getRoleText(userInfo.Role) }}
           </span>
         </div>
 
@@ -32,29 +32,29 @@
                 <span class="icon">🆔</span>
                 User ID
               </span>
-              <span class="value">{{ userInfo.userId }}</span>
+              <span class="value">{{ userInfo.UserId }}</span>
             </div>
             <div class="info-row">
               <span class="label">
                 <span class="icon">👤</span>
                 Tên đăng nhập
               </span>
-              <span class="value">{{ userInfo.username }}</span>
+              <span class="value">{{ userInfo.Username }}</span>
             </div>
             <div class="info-row">
               <span class="label">
                 <span class="icon">📝</span>
                 Họ và tên
               </span>
-              <span class="value">{{ userInfo.fullName || '(Chưa cập nhật)' }}</span>
+              <span class="value">{{ userInfo.FullName || '(Chưa cập nhật)' }}</span>
             </div>
             <div class="info-row">
               <span class="label">
                 <span class="icon">🔑</span>
                 Vai trò
               </span>
-              <span class="value role-value" :class="getRoleBadgeClass(userInfo.role)">
-                {{ getRoleText(userInfo.role) }}
+              <span class="value role-value" :class="getRoleBadgeClass(userInfo.Role)">
+                {{ getRoleText(userInfo.Role) }}
               </span>
             </div>
           </div>
@@ -324,7 +324,7 @@ onMounted(() => {
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 13px;
-  color: white;
+  color: rgb(0, 0, 0);
 }
 
 .role-value.badge-admin {
