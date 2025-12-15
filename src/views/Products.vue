@@ -83,6 +83,51 @@
         />
       </div>
 
+      <!-- 🖼️ Hình ảnh sản phẩm -->
+      <div class="form-group image-form-group">
+        <label>Hình ảnh sản phẩm</label>
+        
+        <div class="image-upload-wrapper">
+          <!-- Preview ảnh hiện tại hoặc ảnh mới chọn -->
+          <div class="image-preview-container">
+            <img 
+              v-if="imagePreviewUrl || product.ImageUrl" 
+              :src="imagePreviewUrl || product.ImageUrl" 
+              alt="Product Preview" 
+              class="image-preview" 
+              @click="showImageModal(imagePreviewUrl || product.ImageUrl)"
+            />
+            <div v-else class="no-image-placeholder">
+              <span>📷</span>
+              <span>Chưa có ảnh</span>
+            </div>
+          </div>
+          
+          <!-- Nút điều khiển ảnh -->
+          <div v-if="(!viewMode || editMode) && can('product_manage')" class="image-controls">
+            <label class="btn-upload-image">
+              <span>📁 Chọn ảnh</span>
+              <input 
+                type="file" 
+                accept="image/*"
+                @change="handleImageSelect"
+                ref="fileInput"
+                hidden
+              />
+            </label>
+            <button 
+              type="button" 
+              v-if="imagePreviewUrl || (product.ImageUrl && !isDefaultImage(product.ImageUrl))" 
+              @click="removeImage" 
+              class="btn-remove-image"
+              title="Xóa ảnh"
+            >
+              🗑️ Xóa ảnh
+            </button>
+          </div>
+        </div>
+      </div>
+
       <button type="submit" v-if="!viewMode && can('product_manage')">{{ editMode ? "Cập nhật" : "Thêm mới" }}</button>
       <button type="button" v-if="editMode && can('product_manage')" @click="cancelEdit">Hủy</button>
       <button type="button" v-if="viewMode && !editMode" @click="closeView">Đóng</button>
@@ -95,6 +140,7 @@
       <thead>
         <tr>
           <th>ID</th>
+          <th>Hình ảnh</th>
           <th>Danh mục</th>
           <th>Nhà cung cấp</th>
           <th>Tên sản phẩm</th>
@@ -112,6 +158,16 @@
           :class="{ active: viewMode && product.ProductId === p?.ProductId }"
         >
           <td>{{ displayId(p?.ProductId) }}</td>
+          <td>
+            <img 
+              v-if="p?.ImageUrl"
+              :src="p.ImageUrl" 
+              alt="Product" 
+              class="product-thumbnail"
+              @click.stop="showImageModal(p.ImageUrl)"
+            />
+            <span v-else class="no-image">-</span>
+          </td>
           <td>{{ p?.Category?.CategoryName || '-' }}</td>
           <td>{{ p?.Supplier?.Name || '-' }}</td>
           <td>{{ p?.ProductName || '-' }}</td>
@@ -150,12 +206,18 @@
       <p>{{ errorMessage }}</p>
       <button @click="errorMessage = ''">Đóng</button>
     </div>
+
+    <!-- 🖼️ Modal xem ảnh lớn -->
+    <div v-if="showImageModalFlag" class="image-modal-overlay" @click="closeImageModal">
+      <span class="image-modal-close" @click="closeImageModal">&times;</span>
+      <img :src="modalImageUrl" alt="Product Image" class="image-modal-content" @click.stop />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI } from "../api/Product.js";
+import { getProducts, addProduct, updateProduct, deleteProduct as deleteProductAPI, uploadProductImage } from "../api/Product.js";
 import { getCategories } from "../api/Category.js";
 import { getSuppliers } from "../api/Suppliers.js";
 import { usePermissions } from "../composables/usePermissions.js";
@@ -166,6 +228,13 @@ const { can } = usePermissions();
 // ----- Categories & Suppliers từ API
 const categories = ref([]);
 const suppliers = ref([]);
+
+// ----- Image handling
+const selectedImageFile = ref(null);
+const imagePreviewUrl = ref(null);
+const fileInput = ref(null);
+const showImageModalFlag = ref(false);
+const modalImageUrl = ref("");;
 
 // ----- Products
 const products = ref([]);
@@ -178,9 +247,7 @@ const product = ref({
   Barcode: "",
   Price: 0,
   Unit: "pcs",
-  CategoryId: null,
-  SupplierId: null,
-  ProductId: null,
+  ImageUrl: "0.png",
 });
 const editMode = ref(false);
 const viewMode = ref(false);
@@ -336,15 +403,32 @@ async function saveProduct() {
       Barcode: product.value.Barcode?.trim() || null,
       Unit: product.value.Unit?.trim() || "pcs",
       CategoryId: product.value.CategoryId || null,
-      SupplierId: product.value.SupplierId || null
+      SupplierId: product.value.SupplierId || null,
+      // Chỉ gửi key, không gửi presigned URL
+      // Nếu ImageUrl là URL (bắt đầu bằng http) thì gửi null để giữ nguyên giá trị cũ
+      // Nếu là "0.png" hoặc key bình thường thì gửi luôn
+      ImageUrl: product.value.ImageUrl?.startsWith('http') 
+        ? null 
+        : (product.value.ImageUrl || "0.png")
     };
 
+    let savedProduct;
     if (editMode.value) {
-      await updateProduct(product.value.ProductId, productData);
+      savedProduct = await updateProduct(product.value.ProductId, productData);
     } else {
       // Xóa ProductId khi tạo mới
       delete productData.ProductId;
-      await addProduct(productData);
+      savedProduct = await addProduct(productData);
+    }
+    
+    // Upload ảnh nếu có file được chọn
+    if (selectedImageFile.value && savedProduct?.ProductId) {
+      try {
+        await uploadProductImage(savedProduct.ProductId, selectedImageFile.value);
+      } catch (uploadErr) {
+        console.error("Lỗi khi upload ảnh:", uploadErr);
+        errorMessage.value = "Sản phẩm đã được lưu nhưng không thể upload ảnh";
+      }
     }
     
     await fetchProducts();
@@ -359,6 +443,7 @@ async function saveProduct() {
     }
   }
 }
+
 
 // ----- Delete product
 async function deleteProduct(id) {
@@ -380,7 +465,8 @@ async function deleteProduct(id) {
 // ----- Edit / View / Close / Cancel
 function editProduct(p) {
   product.value = { ...p };
-
+  selectedImageFile.value = null;
+  imagePreviewUrl.value = null;
   editMode.value = true;
   viewMode.value = false;
 }
@@ -388,6 +474,8 @@ function editProduct(p) {
 function viewProduct(p) {
   if (!editMode.value) {
     product.value = { ...p };
+    selectedImageFile.value = null;
+    imagePreviewUrl.value = null;
     viewMode.value = true;
   }
 }
@@ -412,7 +500,65 @@ function resetForm() {
     Barcode: "",
     Price: 0,
     Unit: "pcs",
+    ImageUrl: null,
   };
+  selectedImageFile.value = null;
+  imagePreviewUrl.value = null;
+  if (fileInput.value) {
+    fileInput.value.value = '';
+  }
+}
+
+// ----- Image Handling Functions
+function handleImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    errorMessage.value = "Vui lòng chọn file hình ảnh";
+    return;
+  }
+  
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    errorMessage.value = "Kích thước ảnh không được vượt quá 5MB";
+    return;
+  }
+  
+  selectedImageFile.value = file;
+  
+  // Create preview URL
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    imagePreviewUrl.value = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  selectedImageFile.value = null;
+  imagePreviewUrl.value = null;
+  product.value.ImageUrl = "0.png";
+  if (fileInput.value) {
+    fileInput.value.value = '';
+  }
+}
+
+function showImageModal(url) {
+  modalImageUrl.value = url;
+  showImageModalFlag.value = true;
+}
+
+function closeImageModal() {
+  showImageModalFlag.value = false;
+  modalImageUrl.value = "";
+}
+
+// Kiểm tra có phải ảnh mặc định không (0.png)
+function isDefaultImage(url) {
+  if (!url) return true;
+  return url.includes('0.png');
 }
 
 // ----- Helpers
