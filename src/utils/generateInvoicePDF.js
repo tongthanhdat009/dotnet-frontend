@@ -97,13 +97,18 @@ export function generateInvoicePDF(order) {
   doc.setFont("Roboto", "normal");
   doc.setTextColor(0, 0, 0);
   
-  doc.text(order.Customer?.Name || "Khách lẻ", xBox, yBox);
+  doc.text(order.Name || order.Customer?.Name || "Khách lẻ", xBox, yBox);
   yBox += 5;
   doc.setTextColor(...grayColor);
-  doc.text(order.Customer?.Phone || "", xBox, yBox);
+  doc.text(order.Phone || "", xBox, yBox);
   yBox += 5;
   
-  const addressLines = doc.splitTextToSize(order.Customer?.Address || "", boxWidth - 10);
+  if (order.Email) {
+    doc.text(order.Email, xBox, yBox);
+    yBox += 5;
+  }
+
+  const addressLines = doc.splitTextToSize(order.Address || "", boxWidth - 10);
   doc.text(addressLines, xBox, yBox);
 
   // Right Box: Payment & Status

@@ -33,8 +33,12 @@
           <td>{{ displayId(o.OrderId) }}</td>
           <td>
             <div class="customer-col">
-              <strong>{{ o.Customer?.Name || '-' }}</strong>
-              <small>{{ o.Customer?.Phone || '-' }}</small>
+              <strong>{{ o.Name || o.Customer?.Name || 'Khách lẻ' }}</strong>
+              <small v-if="o.Phone">{{ o.Phone }}</small>
+              <small v-if="o.Email">{{ o.Email }}</small>
+              <small class="address-text" v-if="o.Address">
+                {{ o.Address }}
+              </small>
             </div>
           </td>
           <td>{{ formatDate(o.OrderDate) }}</td>
@@ -179,8 +183,9 @@ onMounted(load);
 .order-table { width:100%; border-collapse: collapse; }
 .order-table th, .order-table td { border:1px solid #eee; padding:10px; text-align:center; }
 .order-table thead th {   background-color: #2c3e50;color: #ffffff; }
-.customer-col { display:flex; flex-direction:column; align-items:flex-start; }
+.customer-col { display:flex; flex-direction:column; align-items:flex-start; text-align: left; }
 .customer-col small { color:#6b7280; }
+.address-text { font-size: 0.8em; color: #555; margin-top: 2px; max-width: 200px; white-space: normal; }
 .actions { display:flex; gap:8px; justify-content:center; }
 .btn-outline { padding:6px 10px; border:2px solid #1abc9c; color:#1abc9c; background:#fff; border-radius:6px; font-weight:600; cursor:pointer; }
 .btn-outline:hover { background:#1abc9c; color:#fff; }

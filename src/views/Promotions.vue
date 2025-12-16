@@ -119,7 +119,7 @@
           <td>
             <button @click.stop="editPromotion(p)">✏️</button>
             <button @click.stop="confirmAction('delete', p)">🗑️</button>
-            <button @click.stop="openGiftModal(p.PromoId)" title="Tặng Voucher">🎁</button>
+            <button @click.stop="openGiftModal(p.PromoId)" title="Tặng Voucher" :disabled="getRemainingCount(p) <= 0" :class="{ disabled: getRemainingCount(p) <= 0 }">🎁</button>
           </td>
         </tr>
         <tr v-if="filteredPromotions.length === 0">
@@ -259,15 +259,20 @@ function toggleCustomerSelection(id) {
 }
 
 function getRemainingCount(p) {
-  if (!p.UsageLimit) return '∞';
-  return Math.max(0, p.UsageLimit - (p.UsedCount || 0));
+  const limit = p.UsageLimit || 0;
+  return Math.max(0, limit - (p.UsedCount || 0));
 }
 
 const isAllAutoSelected = computed(() => {
     if (!currentGiftPromo.value || filteredCustomers.value.length === 0) return false;
-    const limit = currentGiftPromo.value.UsageLimit ? Math.max(0, currentGiftPromo.value.UsageLimit - (currentGiftPromo.value.UsedCount || 0)) : Infinity;
-    const expectedCount = Math.min(limit, filteredCustomers.value.length);
-    // If we have selected at least the expected count (or all if unlimited), show checked
+    const p = currentGiftPromo.value;
+    const limit = p.UsageLimit || 0;
+    const remaining = Math.max(0, limit - (p.UsedCount || 0));
+    
+    if (remaining === 0) return false;
+
+    const expectedCount = Math.min(remaining, filteredCustomers.value.length);
+    // If we have selected at least the expected count, show checked
     return selectedCustomerIds.value.length > 0 && selectedCustomerIds.value.length >= expectedCount;
 });
 
@@ -278,16 +283,17 @@ function toggleSelectAllAuto(e) {
   } else {
     if (!currentGiftPromo.value) return;
     const p = currentGiftPromo.value;
-    const limit = p.UsageLimit ? Math.max(0, p.UsageLimit - (p.UsedCount || 0)) : Infinity;
+    const limit = p.UsageLimit || 0;
+    const remaining = Math.max(0, limit - (p.UsedCount || 0));
     
-    if (limit === 0) {
+    if (remaining === 0) {
       alert("Mã khuyến mãi này đã hết lượt sử dụng.");
       e.target.checked = false;
       return;
     }
     
-    // Select top 'limit' customers from the filtered list
-    const countToSelect = Math.min(limit, filteredCustomers.value.length);
+    // Select top 'remaining' customers from the filtered list
+    const countToSelect = Math.min(remaining, filteredCustomers.value.length);
     selectedCustomerIds.value = filteredCustomers.value.slice(0, countToSelect).map(c => c.CustomerId);
   }
 }
@@ -637,4 +643,6 @@ async function doDelete(target) {
   color: #666;
   font-style: italic;
 }
+
+button.disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(100%); }
 </style>
